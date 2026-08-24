@@ -15,7 +15,18 @@ namespace AudioDeviceSwitcher
             // see https://aka.ms/applicationconfiguration.
             ApplicationConfiguration.Initialize();
 
-            // Initialize WPF Application to prevent it from shutting down when the last window closes
+            // Cleanup portable update leftover (.old)
+            try
+            {
+                string currentExe = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string oldExe = currentExe + ".old";
+                if (System.IO.File.Exists(oldExe))
+                {
+                    System.IO.File.Delete(oldExe);
+                }
+            }
+            catch { }
+
             if (System.Windows.Application.Current == null)
             {
                 new System.Windows.Application

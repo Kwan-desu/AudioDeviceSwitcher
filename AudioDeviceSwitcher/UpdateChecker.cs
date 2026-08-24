@@ -45,36 +45,38 @@ namespace AudioDeviceSwitcher
         {
             try
             {
-                string tempZip = Path.Combine(Path.GetTempPath(), "AudioDeviceSwitcherInstaller.zip");
-                string extractFolder = Path.Combine(Path.GetTempPath(), "AudioDeviceSwitcher_Update");
+                string tempExe = Path.Combine(Path.GetTempPath(), "AudioDeviceSwitcher_Update.exe");
                 
-                if (File.Exists(tempZip)) File.Delete(tempZip);
-                if (Directory.Exists(extractFolder)) Directory.Delete(extractFolder, true);
+                if (File.Exists(tempExe)) File.Delete(tempExe);
                 
                 using (var client = new HttpClient())
                 {
                     var response = await client.GetAsync(downloadUrl);
-                    using (var fs = new FileStream(tempZip, FileMode.Create))
+                    using (var fs = new FileStream(tempExe, FileMode.Create))
                     {
                         await response.Content.CopyToAsync(fs);
                     }
                 }
 
-                ZipFile.ExtractToDirectory(tempZip, extractFolder);
-                string installerExe = Path.Combine(extractFolder, "AudioDeviceSwitcherInstaller.exe");
-                
-                if (File.Exists(installerExe))
+                // Portable Self-Update Magic
+                string currentExe = Process.GetCurrentProcess().MainModule?.FileName ?? System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string oldExe = currentExe + ".old";
+
+                // Remove previous old file if it exists
+                if (File.Exists(oldExe)) File.Delete(oldExe);
+
+                // Windows allows renaming running executables, but not overwriting them
+                File.Move(currentExe, oldExe);
+                File.Move(tempExe, currentExe);
+
+                // Restart app
+                Process.Start(new ProcessStartInfo
                 {
-                    // Run the installer silently, it will read the install path from Registry, kill us, overwrite, and restart
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = installerExe,
-                        Arguments = "--silent",
-                        UseShellExecute = true
-                    });
-                    
-                    System.Windows.Application.Current?.Shutdown();
-                }
+                    FileName = currentExe,
+                    UseShellExecute = true
+                });
+                
+                System.Windows.Application.Current?.Shutdown();
             }
             catch (Exception ex)
             {

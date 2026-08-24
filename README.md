@@ -28,12 +28,11 @@
 
 ### Installation
 
-You can download and run the standalone installer directly from the releases page:
+You can download and run the standalone portable executable directly from the releases page:
 
-1. Download the latest installer: **[AudioDeviceSwitcherInstaller.zip](https://github.com/Kwan-desu/AudioDeviceSwitcher/releases/latest/download/AudioDeviceSwitcherInstaller.zip)**
-2. Extract the zip file and run `AudioDeviceSwitcherInstaller.exe`. 
-3. The installer will automatically extract the application, place it in your Local AppData, and create convenient shortcuts on your Desktop and Start Menu.
-4. Launch the app from your System Tray and configure your preferred Quick Switch devices from the Settings menu!
+1. Download the latest release: **[AudioDeviceSwitcher.exe](https://github.com/Kwan-desu/AudioDeviceSwitcher/releases/latest/download/AudioDeviceSwitcher.exe)**
+2. Place the `.exe` anywhere you like on your computer.
+3. Run `AudioDeviceSwitcher.exe`. The app will launch in your System Tray and the built-in updater will handle all future updates!
 
 > **Note:** The application minimizes to the System Tray by default. **Left-click** the tray icon to quickly swap devices, or **Right-click** it to access the Volume Mixer and Settings.
 
