@@ -5,6 +5,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace AudioDeviceSwitcherInstaller
 {
@@ -13,16 +14,31 @@ namespace AudioDeviceSwitcherInstaller
         private Button _installBtn;
         private Label _statusLabel;
         private ProgressBar _progressBar;
+        private TextBox _pathTextBox;
+        private Button _browseBtn;
+        
+        private bool _isSilent;
+        private string _registryKey = @"Software\AudioDeviceSwitcher";
 
-        public Form1()
+        public Form1(bool silent = false)
         {
+            _isSilent = silent;
             SetupUI();
+            
+            if (_isSilent)
+            {
+                this.Load += (s, e) => {
+                    this.Opacity = 0;
+                    this.ShowInTaskbar = false;
+                    StartInstall();
+                };
+            }
         }
 
         private void SetupUI()
         {
             this.Text = "Audio Device Switcher Setup";
-            this.Size = new Size(400, 200);
+            this.Size = new Size(420, 240);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -42,16 +58,79 @@ namespace AudioDeviceSwitcherInstaller
             {
                 Text = "Install Audio Device Switcher",
                 Font = new Font("Segoe UI", 14, FontStyle.Bold),
-                Location = new Point(20, 20),
+                Location = new Point(20, 15),
                 AutoSize = true
             };
             this.Controls.Add(titleLabel);
+            
+            // Path Selection
+            Label pathLabel = new Label
+            {
+                Text = "Installation Folder:",
+                Font = new Font("Segoe UI", 9),
+                Location = new Point(22, 55),
+                AutoSize = true,
+                ForeColor = Color.LightGray
+            };
+            this.Controls.Add(pathLabel);
+
+            string defaultPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AudioDeviceSwitcher");
+            
+            // Try load previous install path from registry
+            try 
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(_registryKey))
+                {
+                    if (key != null)
+                    {
+                        var savedPath = key.GetValue("InstallDir") as string;
+                        if (!string.IsNullOrEmpty(savedPath)) defaultPath = savedPath;
+                    }
+                }
+            } 
+            catch { }
+
+            _pathTextBox = new TextBox
+            {
+                Text = defaultPath,
+                Location = new Point(24, 75),
+                Size = new Size(270, 25),
+                Font = new Font("Segoe UI", 9),
+                BackColor = Color.FromArgb(45, 45, 45),
+                ForeColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            this.Controls.Add(_pathTextBox);
+
+            _browseBtn = new Button
+            {
+                Text = "Browse...",
+                Location = new Point(300, 74),
+                Size = new Size(80, 26),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(60, 60, 60),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9)
+            };
+            _browseBtn.FlatAppearance.BorderSize = 0;
+            _browseBtn.Click += (s, e) =>
+            {
+                using (var fbd = new FolderBrowserDialog())
+                {
+                    fbd.SelectedPath = _pathTextBox.Text;
+                    if (fbd.ShowDialog() == DialogResult.OK)
+                    {
+                        _pathTextBox.Text = Path.Combine(fbd.SelectedPath, "AudioDeviceSwitcher");
+                    }
+                }
+            };
+            this.Controls.Add(_browseBtn);
 
             _statusLabel = new Label
             {
                 Text = "Ready to install.",
                 Font = new Font("Segoe UI", 9),
-                Location = new Point(22, 60),
+                Location = new Point(22, 110),
                 AutoSize = true,
                 ForeColor = Color.DarkGray
             };
@@ -59,8 +138,8 @@ namespace AudioDeviceSwitcherInstaller
 
             _progressBar = new ProgressBar
             {
-                Location = new Point(20, 85),
-                Size = new Size(340, 10),
+                Location = new Point(24, 135),
+                Size = new Size(356, 10),
                 Style = ProgressBarStyle.Continuous
             };
             this.Controls.Add(_progressBar);
@@ -68,7 +147,7 @@ namespace AudioDeviceSwitcherInstaller
             _installBtn = new Button
             {
                 Text = "Install",
-                Location = new Point(260, 115),
+                Location = new Point(280, 160),
                 Size = new Size(100, 30),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(0, 120, 215),
@@ -76,49 +155,78 @@ namespace AudioDeviceSwitcherInstaller
                 Font = new Font("Segoe UI", 9, FontStyle.Bold)
             };
             _installBtn.FlatAppearance.BorderSize = 0;
-            _installBtn.Click += InstallBtn_Click;
+            _installBtn.Click += (s, ev) => StartInstall();
             this.Controls.Add(_installBtn);
         }
 
-        private async void InstallBtn_Click(object? sender, EventArgs e)
+        private async void StartInstall()
         {
             _installBtn.Enabled = false;
+            _browseBtn.Enabled = false;
+            _pathTextBox.Enabled = false;
             _progressBar.Style = ProgressBarStyle.Marquee;
+            _statusLabel.Text = "Installing...";
+
+            string targetDir = _pathTextBox.Text.Trim();
 
             try
             {
-                await Task.Run(() => PerformInstallation());
+                await Task.Run(() => PerformInstallation(targetDir));
+                
+                if (_isSilent)
+                {
+                    // Launch app and exit silently
+                    string exePath = Path.Combine(targetDir, "AudioDeviceSwitcher.exe");
+                    Process.Start(new ProcessStartInfo { FileName = exePath, UseShellExecute = true });
+                    Application.Exit();
+                    return;
+                }
+
                 _progressBar.Style = ProgressBarStyle.Continuous;
                 _progressBar.Value = 100;
                 _statusLabel.Text = "Installation Complete!";
                 _statusLabel.ForeColor = Color.LightGreen;
                 _installBtn.Text = "Finish";
-                _installBtn.Click -= InstallBtn_Click;
+                
+                // Clear old handlers
+                _installBtn.Click -= (s, ev) => StartInstall();
                 _installBtn.Click += (s, ev) => this.Close();
                 _installBtn.Enabled = true;
 
                 // Launch the app
-                string installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AudioDeviceSwitcher");
-                string exePath = Path.Combine(installDir, "AudioDeviceSwitcher.exe");
-                Process.Start(new ProcessStartInfo { FileName = exePath, UseShellExecute = true });
+                string appPath = Path.Combine(targetDir, "AudioDeviceSwitcher.exe");
+                Process.Start(new ProcessStartInfo { FileName = appPath, UseShellExecute = true });
             }
             catch (Exception ex)
             {
+                if (_isSilent) Application.Exit();
+                
                 _progressBar.Style = ProgressBarStyle.Continuous;
                 _statusLabel.Text = "Error: " + ex.Message;
                 _statusLabel.ForeColor = Color.Red;
                 _installBtn.Enabled = true;
+                _browseBtn.Enabled = true;
+                _pathTextBox.Enabled = true;
             }
         }
 
-        private void PerformInstallation()
+        private void PerformInstallation(string installDir)
         {
             // 1. Create Directory
-            string installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AudioDeviceSwitcher");
             if (!Directory.Exists(installDir))
             {
                 Directory.CreateDirectory(installDir);
             }
+
+            // Save to Registry for updates
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(_registryKey))
+                {
+                    key.SetValue("InstallDir", installDir);
+                }
+            }
+            catch { }
 
             // 2. Kill existing process if running
             foreach (var proc in Process.GetProcessesByName("AudioDeviceSwitcher"))

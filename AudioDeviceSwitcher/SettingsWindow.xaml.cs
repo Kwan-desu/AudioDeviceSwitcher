@@ -24,6 +24,7 @@ namespace AudioDeviceSwitcher
             _audioManager = audioManager;
             
             LoadSettings();
+            CheckUpdates();
         }
 
         private void LoadSettings()
@@ -105,6 +106,27 @@ namespace AudioDeviceSwitcher
         {
             this.DialogResult = false;
             this.Close();
+        }
+
+        private string? _updateUrl;
+
+        private async void CheckUpdates()
+        {
+            _updateUrl = await UpdateChecker.CheckForUpdatesAsync();
+            if (_updateUrl != null)
+            {
+                UpdateButton.Visibility = Visibility.Visible;
+            }
+        }
+
+        private async void Update_Click(object sender, RoutedEventArgs e)
+        {
+            if (_updateUrl != null)
+            {
+                UpdateButton.Content = "Downloading...";
+                UpdateButton.IsEnabled = false;
+                await UpdateChecker.DownloadAndInstallUpdateAsync(_updateUrl);
+            }
         }
     }
 }
