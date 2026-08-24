@@ -163,100 +163,117 @@ namespace AudioDeviceSwitcher
             }
 
             _trayIcon.Text = tipText;
+            var oldIcon = _trayIcon.Icon;
             _trayIcon.Icon = GenerateGiantTaskbarIcon(label, volume, isMuted);
+            if (oldIcon != null)
+            {
+                // Note: Application.ExecutablePath icon is shared, so don't dispose it if it's the default
+                oldIcon.Dispose();
+            }
         }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        extern static bool DestroyIcon(IntPtr handle);
 
         private Icon GenerateGiantTaskbarIcon(string label, int volume, bool isMuted)
         {
             // 32x32 pixel canvas with 100% edge-to-edge drawing
-            Bitmap bmp = new Bitmap(32, 32);
-            using (Graphics g = Graphics.FromImage(bmp))
+            using (Bitmap bmp = new Bitmap(32, 32))
             {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.Clear(Color.Transparent);
-
-                // 1. Draw GIANT Speaker (fills from Y=1 to Y=31, X=0 to X=31)
-                using (Pen pen = new Pen(Color.White, 2.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                using (Pen redPen = new Pen(Color.FromArgb(255, 75, 75), 3.0f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                using (SolidBrush fillBrush = new SolidBrush(Color.White))
+                using (Graphics g = Graphics.FromImage(bmp))
                 {
-                    // Large solid speaker body (Height: 28px)
-                    Point[] speakerPts = {
-                        new Point(1, 10),
-                        new Point(8, 10),
-                        new Point(15, 2),
-                        new Point(15, 30),
-                        new Point(8, 22),
-                        new Point(1, 22)
-                    };
-                    g.FillPolygon(fillBrush, speakerPts);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.Clear(Color.Transparent);
 
-                    // Sound Waves / Mute X (Spanning edge-to-edge)
-                    if (isMuted || volume == 0)
+                    // 1. Draw GIANT Speaker (fills from Y=1 to Y=31, X=0 to X=31)
+                    using (Pen pen = new Pen(Color.White, 2.5f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    using (Pen redPen = new Pen(Color.FromArgb(255, 75, 75), 3.0f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                    using (SolidBrush fillBrush = new SolidBrush(Color.White))
                     {
-                        g.DrawLine(redPen, 18, 9, 29, 23);
-                        g.DrawLine(redPen, 29, 9, 18, 23);
-                    }
-                    else
-                    {
-                        // Wave 1
-                        g.DrawArc(pen, 11, 8, 10, 16, -45, 90);
+                        // Large solid speaker body (Height: 28px)
+                        Point[] speakerPts = {
+                            new Point(1, 10),
+                            new Point(8, 10),
+                            new Point(15, 2),
+                            new Point(15, 30),
+                            new Point(8, 22),
+                            new Point(1, 22)
+                        };
+                        g.FillPolygon(fillBrush, speakerPts);
 
-                        // Wave 2 (> 33%)
-                        if (volume > 33)
+                        // Sound Waves / Mute X (Spanning edge-to-edge)
+                        if (isMuted || volume == 0)
                         {
-                            g.DrawArc(pen, 7, 4, 18, 24, -45, 90);
+                            g.DrawLine(redPen, 18, 9, 29, 23);
+                            g.DrawLine(redPen, 29, 9, 18, 23);
                         }
-
-                        // Wave 3 (> 66%)
-                        if (volume > 66)
+                        else
                         {
-                            g.DrawArc(pen, 3, 0, 26, 32, -45, 90);
+                            // Wave 1
+                            g.DrawArc(pen, 11, 8, 10, 16, -45, 90);
+
+                            // Wave 2 (> 33%)
+                            if (volume > 33)
+                            {
+                                g.DrawArc(pen, 7, 4, 18, 24, -45, 90);
+                            }
+
+                            // Wave 3 (> 66%)
+                            if (volume > 66)
+                            {
+                                g.DrawArc(pen, 3, 0, 26, 32, -45, 90);
+                            }
+                        }
+                    }
+
+                    // 2. High-Contrast Device Number Badge (e.g. 1, 2, 3 or A1)
+                    string badge = label.Trim();
+                    if (badge.StartsWith("AUX ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        badge = badge.Substring(4).Trim();
+                    }
+
+                    if (!string.IsNullOrEmpty(badge))
+                    {
+                        using (Font badgeFont = new Font("Segoe UI", badge.Length > 1 ? 8.5F : 10.5F, FontStyle.Bold, GraphicsUnit.Pixel))
+                        {
+                            SizeF size = g.MeasureString(badge, badgeFont);
+                            int badgeW = Math.Max((int)size.Width + 4, 14);
+                            int badgeH = 14;
+                            int badgeX = 32 - badgeW;
+                            int badgeY = 32 - badgeH;
+
+                            // Dark rounded container
+                            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(245, 10, 15, 22)))
+                            using (Pen borderPen = new Pen(Color.FromArgb(0, 160, 255), 1.4f))
+                            using (GraphicsPath path = GetRoundedRect(new Rectangle(badgeX, badgeY, badgeW - 1, badgeH - 1), 3))
+                            {
+                                g.FillPath(bgBrush, path);
+                                g.DrawPath(borderPen, path);
+                            }
+
+                            // Vibrant Blue/White number text
+                            using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(0, 215, 255)))
+                            {
+                                float tx = badgeX + (badgeW - size.Width) / 2f;
+                                float ty = badgeY + (badgeH - size.Height) / 2f - 0.5f;
+                                g.DrawString(badge, badgeFont, textBrush, tx, ty);
+                            }
                         }
                     }
                 }
 
-                // 2. High-Contrast Device Number Badge (e.g. 1, 2, 3 or A1)
-                string badge = label.Trim();
-                if (badge.StartsWith("AUX ", StringComparison.OrdinalIgnoreCase))
+                IntPtr hIcon = bmp.GetHicon();
+                Icon newIcon;
+                using (Icon tmpIcon = Icon.FromHandle(hIcon))
                 {
-                    badge = badge.Substring(4).Trim();
+                    newIcon = (Icon)tmpIcon.Clone();
                 }
-
-                if (!string.IsNullOrEmpty(badge))
-                {
-                    using (Font badgeFont = new Font("Segoe UI", badge.Length > 1 ? 8.5F : 10.5F, FontStyle.Bold, GraphicsUnit.Pixel))
-                    {
-                        SizeF size = g.MeasureString(badge, badgeFont);
-                        int badgeW = Math.Max((int)size.Width + 4, 14);
-                        int badgeH = 14;
-                        int badgeX = 32 - badgeW;
-                        int badgeY = 32 - badgeH;
-
-                        // Dark rounded container
-                        using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(245, 10, 15, 22)))
-                        using (Pen borderPen = new Pen(Color.FromArgb(0, 160, 255), 1.4f))
-                        using (GraphicsPath path = GetRoundedRect(new Rectangle(badgeX, badgeY, badgeW - 1, badgeH - 1), 3))
-                        {
-                            g.FillPath(bgBrush, path);
-                            g.DrawPath(borderPen, path);
-                        }
-
-                        // Vibrant Blue/White number text
-                        using (SolidBrush textBrush = new SolidBrush(Color.FromArgb(0, 215, 255)))
-                        {
-                            float tx = badgeX + (badgeW - size.Width) / 2f;
-                            float ty = badgeY + (badgeH - size.Height) / 2f - 0.5f;
-                            g.DrawString(badge, badgeFont, textBrush, tx, ty);
-                        }
-                    }
-                }
+                DestroyIcon(hIcon);
+                return newIcon;
             }
-
-            IntPtr hIcon = bmp.GetHicon();
-            return Icon.FromHandle(hIcon);
         }
 
         private GraphicsPath GetRoundedRect(Rectangle bounds, int radius)

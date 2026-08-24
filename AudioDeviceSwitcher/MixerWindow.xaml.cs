@@ -170,7 +170,7 @@ namespace AudioDeviceSwitcher
             if (defaultDevice != null)
             {
                 var sessions = defaultDevice.SessionController.All()
-                    .Where(s => !string.IsNullOrEmpty(s.ExecutablePath) && !s.IsSystemSession)
+                    .Where(s => !s.IsSystemSession && (!string.IsNullOrEmpty(s.ExecutablePath) || s.ProcessId > 0))
                     .ToList();
 
                 if (sessions.Count > 0)
@@ -213,18 +213,55 @@ namespace AudioDeviceSwitcher
             topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
+            ImageSource? iconSource = null;
+            string appName = session.DisplayName;
+
+            if (!string.IsNullOrEmpty(session.ExecutablePath))
+            {
+                iconSource = GetIconForProcess(session.ExecutablePath);
+                if (string.IsNullOrWhiteSpace(appName))
+                {
+                    appName = System.IO.Path.GetFileNameWithoutExtension(ResolveNtPath(session.ExecutablePath));
+                }
+            }
+            else if (session.ProcessId > 0)
+            {
+                try
+                {
+                    using (var process = System.Diagnostics.Process.GetProcessById(session.ProcessId))
+                    {
+                        if (string.IsNullOrWhiteSpace(appName))
+                        {
+                            appName = process.ProcessName;
+                        }
+                        
+                        try
+                        {
+                            var path = process.MainModule?.FileName;
+                            if (!string.IsNullOrEmpty(path))
+                                iconSource = GetIconForProcess(path);
+                        }
+                        catch { } // Access denied to MainModule
+                    }
+                }
+                catch 
+                { 
+                    if (string.IsNullOrWhiteSpace(appName)) appName = "Unknown App"; 
+                }
+            }
+            else if (string.IsNullOrWhiteSpace(appName))
+            {
+                appName = "System Sounds";
+            }
+
             var appIcon = new Image
             {
                 Width = 16,
                 Height = 16,
                 Margin = new Thickness(0, 0, 8, 0),
                 VerticalAlignment = VerticalAlignment.Center,
-                Source = GetIconForProcess(session.ExecutablePath)
+                Source = iconSource
             };
-
-            string appName = string.IsNullOrWhiteSpace(session.DisplayName) 
-                ? System.IO.Path.GetFileNameWithoutExtension(ResolveNtPath(session.ExecutablePath))
-                : session.DisplayName;
 
             var nameText = new TextBlock
             {
@@ -537,7 +574,7 @@ namespace AudioDeviceSwitcher
                 try
                 {
                     var sessions = defaultDevice.SessionController.All()
-                        .Where(s => !string.IsNullOrEmpty(s.ExecutablePath) && !s.IsSystemSession)
+                        .Where(s => !s.IsSystemSession && (!string.IsNullOrEmpty(s.ExecutablePath) || s.ProcessId > 0))
                         .ToList();
 
                     // If a new session launched or closed, we reload all. 
