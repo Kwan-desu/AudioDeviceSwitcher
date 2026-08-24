@@ -15,8 +15,8 @@ Easily control per-application volume and seamlessly hotkey-switch between multi
 
 You can download and run the installer directly from this repository.
 
-1. Download the latest installer: [AudioDeviceSwitcherInstaller.exe](releases/AudioDeviceSwitcherInstaller.exe)
-2. Run the installer. It will automatically extract the application, place it in your Local AppData, and create convenient shortcuts on your Desktop and Start Menu.
+1. Download the latest installer: [AudioDeviceSwitcherInstaller.zip](https://github.com/Kwan-desu/AudioDeviceSwitcher/releases/latest/download/AudioDeviceSwitcherInstaller.zip)
+2. Extract the zip file and run the installer executable. It will automatically extract the application, place it in your Local AppData, and create convenient shortcuts on your Desktop and Start Menu.
 3. Launch the app and configure your preferred Quick Switch devices from the Settings menu!
 
 ## Development
