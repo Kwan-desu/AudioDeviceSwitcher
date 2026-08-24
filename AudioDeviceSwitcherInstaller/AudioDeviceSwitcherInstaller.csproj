@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\AudioDeviceSwitcher\bin\Release\net10.0-windows\win-x64\publish\AudioDeviceSwitcher.exe" LogicalName="Payload.exe" />
+    <EmbeddedResource Include="..\AudioDeviceSwitcher\app.ico" LogicalName="app.ico" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>..\AudioDeviceSwitcher\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+</Project>
