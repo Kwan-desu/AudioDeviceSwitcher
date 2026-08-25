@@ -173,6 +173,7 @@ namespace AudioDeviceSwitcher
             {
                 var sessions = defaultDevice.SessionController.All()
                     .Where(s => !s.IsSystemSession && (!string.IsNullOrEmpty(s.ExecutablePath) || s.ProcessId > 0))
+                    .OrderBy(s => s.Id)
                     .ToList();
 
                 if (sessions.Count > 0)
@@ -619,6 +620,7 @@ namespace AudioDeviceSwitcher
                 {
                     var sessions = defaultDevice.SessionController.All()
                         .Where(s => !s.IsSystemSession && (!string.IsNullOrEmpty(s.ExecutablePath) || s.ProcessId > 0))
+                        .OrderBy(s => s.Id)
                         .ToList();
 
                     // If a new session launched or closed, we reload all. 
