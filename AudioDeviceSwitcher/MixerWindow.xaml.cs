@@ -9,7 +9,9 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
+using AudioSwitcher.AudioApi;
 using AudioSwitcher.AudioApi.CoreAudio;
+using AudioSwitcher.AudioApi.Session;
 
 using Color = System.Windows.Media.Color;
 using Brush = System.Windows.Media.Brush;
@@ -306,7 +308,8 @@ namespace AudioDeviceSwitcher
                 Maximum = 100,
                 Value = Math.Clamp((int)session.Volume, 0, 100),
                 VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Tag = 0.0
             };
 
             var volText = new TextBlock
@@ -318,6 +321,26 @@ namespace AudioDeviceSwitcher
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
+            };
+
+            // Event handler for Audio Peak Meter (Animation)
+            IDisposable? peakSubscription = null;
+            peakSubscription = session.PeakValueChanged.Subscribe(new ActionObserver<SessionPeakValueChangedArgs>(args =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (slider != null)
+                    {
+                        // PeakValue is typically 0 to 100
+                        slider.Tag = args.PeakValue;
+                    }
+                });
+            }));
+
+            // Clean up subscription when slider is unloaded
+            slider.Unloaded += (s, e) =>
+            {
+                peakSubscription?.Dispose();
             };
 
             muteButton.Click += (s, e) =>
@@ -417,7 +440,8 @@ namespace AudioDeviceSwitcher
                 Maximum = 100,
                 Value = Math.Clamp((int)device.Volume, 0, 100),
                 VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Tag = 0.0
             };
 
             var volText = new TextBlock
@@ -430,6 +454,26 @@ namespace AudioDeviceSwitcher
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
+            };
+
+            // Event handler for Audio Peak Meter (Animation)
+            IDisposable? peakSubscription = null;
+            peakSubscription = device.PeakValueChanged.Subscribe(new ActionObserver<DevicePeakValueChangedArgs>(args =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (slider != null)
+                    {
+                        // PeakValue is typically 0 to 100
+                        slider.Tag = args.PeakValue;
+                    }
+                });
+            }));
+
+            // Clean up subscription when slider is unloaded
+            slider.Unloaded += (s, e) =>
+            {
+                peakSubscription?.Dispose();
             };
 
             // Event Handlers
@@ -635,6 +679,15 @@ namespace AudioDeviceSwitcher
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
+        }
+
+        private class ActionObserver<T> : IObserver<T>
+        {
+            private readonly Action<T> _onNext;
+            public ActionObserver(Action<T> onNext) { _onNext = onNext; }
+            public void OnCompleted() { }
+            public void OnError(Exception error) { }
+            public void OnNext(T value) => _onNext(value);
         }
     }
 }

@@ -62,8 +62,26 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
+                            
                             <!-- Inactive Track -->
                             <Border x:Name="TrackBackground" Height="4" CornerRadius="2" Background="#35FFFFFF" VerticalAlignment="Center"/>
+                            
+                            <!-- Audio Peak Meter -->
+                            <ProgressBar x:Name="PeakMeter" Height="4" Minimum="0" Maximum="100" 
+                                         Value="{Binding RelativeSource={RelativeSource TemplatedParent}, Path=Tag}" 
+                                         VerticalAlignment="Center" Background="Transparent" BorderThickness="0">
+                                <ProgressBar.Foreground>
+                                    <SolidColorBrush Color="#60FFFFFF" />
+                                </ProgressBar.Foreground>
+                                <ProgressBar.Template>
+                                    <ControlTemplate TargetType="ProgressBar">
+                                        <Border CornerRadius="2" Background="Transparent" ClipToBounds="True">
+                                            <Border Name="PART_Indicator" CornerRadius="2" Background="{TemplateBinding Foreground}" HorizontalAlignment="Left" />
+                                        </Border>
+                                    </ControlTemplate>
+                                </ProgressBar.Template>
+                            </ProgressBar>
+
                             <!-- Active Track & Thumb Track -->
                             <Track x:Name="PART_Track">
                                 <Track.DecreaseRepeatButton>
