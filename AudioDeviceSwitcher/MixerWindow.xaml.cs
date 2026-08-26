@@ -196,16 +196,23 @@ namespace AudioDeviceSwitcher
 
         private Border CreateAppSessionCard(AudioSwitcher.AudioApi.Session.IAudioSession session)
         {
+            var defaultBrush = new SolidColorBrush(Color.FromArgb(12, 255, 255, 255));
+            var hoverBrush = new SolidColorBrush(Color.FromArgb(22, 255, 255, 255));
+            var borderBrush = new SolidColorBrush(Color.FromArgb(16, 255, 255, 255));
+
             var cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(6),
-                Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255)), // Subtle transparent card
-                BorderBrush = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255)),
+                CornerRadius = new CornerRadius(7),
+                Background = defaultBrush,
+                BorderBrush = borderBrush,
                 BorderThickness = new Thickness(1),
                 Margin = new Thickness(0, 0, 0, 8),
                 Padding = new Thickness(12, 8, 12, 8),
                 Tag = session.Id
             };
+
+            cardBorder.MouseEnter += (s, e) => cardBorder.Background = hoverBrush;
+            cardBorder.MouseLeave += (s, e) => cardBorder.Background = defaultBrush;
 
             var mainGrid = new Grid();
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -265,14 +272,17 @@ namespace AudioDeviceSwitcher
                 VerticalAlignment = VerticalAlignment.Center,
                 Source = iconSource
             };
+            RenderOptions.SetBitmapScalingMode(appIcon, BitmapScalingMode.HighQuality);
 
             var nameText = new TextBlock
             {
                 Text = appName,
+                FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
                 FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(230, 230, 230)),
+                Foreground = new SolidColorBrush(Color.FromRgb(235, 235, 235)),
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = appName
             };
 
             Grid.SetColumn(appIcon, 0);
@@ -291,8 +301,8 @@ namespace AudioDeviceSwitcher
             {
                 Content = session.IsMuted ? "\uE74F" : "\uE995",
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"),
-                FontSize = 15,
-                Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Colors.White),
+                FontSize = 14,
+                Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220)),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Width = 28,
@@ -316,9 +326,10 @@ namespace AudioDeviceSwitcher
             var volText = new TextBlock
             {
                 Text = $"{(int)session.Volume}",
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(240, 245, 252)),
-                Width = 36,
+                FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
+                FontSize = 12.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 210)),
+                Width = 34,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
@@ -348,7 +359,7 @@ namespace AudioDeviceSwitcher
             {
                 session.IsMuted = !session.IsMuted;
                 muteButton.Content = session.IsMuted ? "\uE74F" : "\uE995";
-                muteButton.Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Colors.White);
+                muteButton.Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220));
             };
 
             slider.ValueChanged += (s, e) =>
@@ -359,7 +370,7 @@ namespace AudioDeviceSwitcher
                 {
                     session.IsMuted = false;
                     muteButton.Content = "\uE995";
-                    muteButton.Foreground = Brushes.White;
+                    muteButton.Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220));
                 }
             };
 
@@ -382,12 +393,15 @@ namespace AudioDeviceSwitcher
 
         private Border CreateDeviceCard(CoreAudioDevice device, bool isDefault)
         {
+            var defaultBg = isDefault ? new SolidColorBrush(Color.FromArgb(28, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(12, 255, 255, 255));
+            var hoverBg = isDefault ? new SolidColorBrush(Color.FromArgb(42, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(22, 255, 255, 255));
+            var borderBrush = isDefault ? new SolidColorBrush(Color.FromArgb(70, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(16, 255, 255, 255));
+
             var cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(6),
-                // Very high-transparency frosted glass cards
-                Background = new SolidColorBrush(isDefault ? Color.FromArgb(70, 0, 110, 255) : Color.FromArgb(20, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(isDefault ? Color.FromArgb(140, 0, 132, 255) : Color.FromArgb(20, 255, 255, 255)),
+                CornerRadius = new CornerRadius(7),
+                Background = defaultBg,
+                BorderBrush = borderBrush,
                 BorderThickness = new Thickness(1),
                 Margin = new Thickness(0, 0, 0, 8),
                 Padding = new Thickness(12, 8, 12, 8),
@@ -395,22 +409,53 @@ namespace AudioDeviceSwitcher
                 Tag = device.Id
             };
 
+            cardBorder.MouseEnter += (s, e) => cardBorder.Background = hoverBg;
+            cardBorder.MouseLeave += (s, e) => cardBorder.Background = defaultBg;
+
             var mainGrid = new Grid();
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             mainGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            // 1. Top Row: Device Name & Active Indicator
+            // 1. Top Row: Device Name & Active Indicator Pill
             var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 4) };
+
             var nameText = new TextBlock
             {
-                Text = (isDefault ? "● " : "") + device.FullName,
-                FontSize = 13,
+                Text = device.FullName,
+                FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
+                FontSize = 13.5,
                 FontWeight = isDefault ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = new SolidColorBrush(isDefault ? Color.FromRgb(220, 240, 255) : Color.FromRgb(245, 245, 245)),
+                Foreground = new SolidColorBrush(isDefault ? Color.FromRgb(255, 255, 255) : Color.FromRgb(230, 230, 230)),
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                VerticalAlignment = VerticalAlignment.Center
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = device.FullName
             };
-            topGrid.Children.Add(nameText);
+
+            if (isDefault)
+            {
+                topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+                var accentPill = new Border
+                {
+                    Width = 3,
+                    Height = 13,
+                    CornerRadius = new CornerRadius(1.5),
+                    Background = new SolidColorBrush(Color.FromRgb(96, 205, 255)),
+                    Margin = new Thickness(0, 0, 8, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+
+                Grid.SetColumn(accentPill, 0);
+                Grid.SetColumn(nameText, 1);
+                topGrid.Children.Add(accentPill);
+                topGrid.Children.Add(nameText);
+            }
+            else
+            {
+                topGrid.Children.Add(nameText);
+            }
+
             Grid.SetRow(topGrid, 0);
 
             // 2. Bottom Row: Speaker Glyph, Slider, Volume Number
@@ -423,8 +468,8 @@ namespace AudioDeviceSwitcher
             {
                 Content = device.IsMuted ? "\uE74F" : "\uE995",
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"),
-                FontSize = 15,
-                Foreground = new SolidColorBrush(device.IsMuted ? Color.FromRgb(255, 90, 90) : Colors.White),
+                FontSize = 14,
+                Foreground = new SolidColorBrush(device.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220)),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Width = 28,
@@ -448,10 +493,11 @@ namespace AudioDeviceSwitcher
             var volText = new TextBlock
             {
                 Text = $"{(int)device.Volume}",
-                FontSize = 13,
+                FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
+                FontSize = 12.5,
                 FontWeight = FontWeights.Normal,
-                Foreground = new SolidColorBrush(Color.FromRgb(245, 245, 245)),
-                Width = 36,
+                Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 210)),
+                Width = 34,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0)
@@ -498,7 +544,7 @@ namespace AudioDeviceSwitcher
             {
                 device.ToggleMute();
                 muteButton.Content = device.IsMuted ? "\uE74F" : "\uE995";
-                muteButton.Foreground = new SolidColorBrush(device.IsMuted ? Color.FromRgb(255, 90, 90) : Colors.White);
+                muteButton.Foreground = new SolidColorBrush(device.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220));
                 _context.UpdateTrayText();
             };
 
@@ -510,7 +556,7 @@ namespace AudioDeviceSwitcher
                 {
                     device.Mute(false);
                     muteButton.Content = "\uE995";
-                    muteButton.Foreground = Brushes.White;
+                    muteButton.Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220));
                 }
                 _context.UpdateTrayText();
             };
@@ -607,8 +653,8 @@ namespace AudioDeviceSwitcher
                     if (dev != null)
                     {
                         bool isDef = defaultDevice != null && dev.Id == defaultDevice.Id;
-                        card.Background = new SolidColorBrush(isDef ? Color.FromArgb(70, 0, 110, 255) : Color.FromArgb(20, 255, 255, 255));
-                        card.BorderBrush = new SolidColorBrush(isDef ? Color.FromArgb(140, 0, 132, 255) : Color.FromArgb(20, 255, 255, 255));
+                        card.Background = isDef ? new SolidColorBrush(Color.FromArgb(28, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(12, 255, 255, 255));
+                        card.BorderBrush = isDef ? new SolidColorBrush(Color.FromArgb(70, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(16, 255, 255, 255));
                     }
                 }
             }
