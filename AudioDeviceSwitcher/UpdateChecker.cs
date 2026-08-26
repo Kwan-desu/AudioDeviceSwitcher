@@ -12,9 +12,36 @@ namespace AudioDeviceSwitcher
 {
     public class UpdateChecker
     {
-        private const string CurrentVersion = "v1.0.1";
         private const string RepoApiUrl = "https://api.github.com/repos/Kwan-desu/AudioDeviceSwitcher/releases/latest";
         
+        public static Version GetCurrentVersion()
+        {
+            var ver = typeof(UpdateChecker).Assembly.GetName().Version;
+            return ver != null ? new Version(ver.Major, ver.Minor, Math.Max(0, ver.Build)) : new Version(1, 0, 0);
+        }
+
+        public static bool IsNewerVersion(string? latestTag)
+        {
+            if (string.IsNullOrWhiteSpace(latestTag)) return false;
+
+            string cleanTag = latestTag.Trim().TrimStart('v', 'V');
+            
+            // Handle versions like "1.4.1-hotfix" by stripping suffix
+            int dashIndex = cleanTag.IndexOf('-');
+            if (dashIndex > 0)
+            {
+                cleanTag = cleanTag.Substring(0, dashIndex);
+            }
+
+            if (Version.TryParse(cleanTag, out var remoteVersion))
+            {
+                var currentVersion = GetCurrentVersion();
+                return remoteVersion > currentVersion;
+            }
+
+            return false;
+        }
+
         public static async Task<string?> CheckForUpdatesAsync()
         {
             try
@@ -26,7 +53,7 @@ namespace AudioDeviceSwitcher
                 using var doc = JsonDocument.Parse(response);
                 var latestTag = doc.RootElement.GetProperty("tag_name").GetString();
                 
-                if (latestTag != null && latestTag != CurrentVersion)
+                if (latestTag != null && IsNewerVersion(latestTag))
                 {
                     // Check if there is an asset
                     var assets = doc.RootElement.GetProperty("assets");
