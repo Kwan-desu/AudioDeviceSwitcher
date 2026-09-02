@@ -117,6 +117,7 @@ namespace AudioDeviceSwitcher
         {
             RunAtStartupCheck.IsChecked = _settings.RunAtStartup;
             EnableHotkeysCheck.IsChecked = _settings.EnableGlobalHotkeys;
+            EnableTrayScrollCheck.IsChecked = _settings.EnableTrayScrollVolume;
 
             var devices = _audioManager.GetActivePlaybackDevices();
             DevicesPanel.Children.Clear();
@@ -201,6 +202,7 @@ namespace AudioDeviceSwitcher
         {
             _settings.RunAtStartup = RunAtStartupCheck.IsChecked ?? false;
             _settings.EnableGlobalHotkeys = EnableHotkeysCheck.IsChecked ?? false;
+            _settings.EnableTrayScrollVolume = EnableTrayScrollCheck.IsChecked ?? true;
 
             _settings.SelectedDeviceIds.Clear();
             _settings.MixerDeviceIds.Clear();

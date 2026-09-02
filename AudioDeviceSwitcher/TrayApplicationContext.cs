@@ -16,6 +16,8 @@ namespace AudioDeviceSwitcher
         private MixerWindow? _currentMixerWindow;
         private System.Windows.Forms.Timer _pollTimer;
         private GlobalHotkeyManager _hotkeyManager;
+        private TrayScrollManager _trayScrollManager;
+        private OsdWindow? _currentOsd;
 
         public TrayApplicationContext()
         {
@@ -37,6 +39,10 @@ namespace AudioDeviceSwitcher
 
             _trayIcon.MouseUp += TrayIcon_MouseUp;
 
+            _trayScrollManager = new TrayScrollManager(_trayIcon);
+            _trayScrollManager.Scrolled += TrayScrollManager_Scrolled;
+            _trayScrollManager.SetEnabled(_settings.EnableTrayScrollVolume);
+
             _trayIcon.ContextMenuStrip.Items.Add("🎚️ Volume Mixer", null, (s, e) => ShowMixer());
             _trayIcon.ContextMenuStrip.Items.Add("🔄 Quick Switch Device", null, (s, e) => QuickSwitch());
             _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
@@ -48,6 +54,59 @@ namespace AudioDeviceSwitcher
             _pollTimer = new System.Windows.Forms.Timer { Interval = 1000 };
             _pollTimer.Tick += (s, e) => UpdateTrayText();
             _pollTimer.Start();
+        }
+
+        private void TrayScrollManager_Scrolled(int direction)
+        {
+            var currentDefault = _audioManager.GetDefaultPlaybackDevice();
+            if (currentDefault != null)
+            {
+                double currentVol = currentDefault.Volume;
+                double newVol = Math.Clamp(currentVol + (direction * 2), 0, 100);
+
+                if (direction > 0 && currentDefault.IsMuted)
+                {
+                    currentDefault.Mute(false);
+                }
+
+                currentDefault.Volume = newVol;
+                UpdateTrayText();
+
+                ShowVolumeOsd(currentDefault.FullName, (int)newVol, currentDefault.IsMuted);
+            }
+        }
+
+        private void ShowVolumeOsd(string deviceName, int volume, bool isMuted)
+        {
+            try
+            {
+                string status = isMuted ? $"{deviceName}  •  Muted" : $"{deviceName}  •  {volume}%";
+                string glyph = isMuted || volume == 0 ? "\uE74F" : (volume > 66 ? "\uE995" : (volume > 33 ? "\uE994" : "\uE993"));
+
+                if (_currentOsd == null || !_currentOsd.IsLoaded)
+                {
+                    _currentOsd = new OsdWindow();
+                    _currentOsd.Closed += (s, e) => _currentOsd = null;
+                }
+
+                _currentOsd.ShowOsd("VOLUME ADJUSTED", status, glyph);
+            }
+            catch { }
+        }
+
+        private void ShowDeviceSwitchOsd(string deviceName)
+        {
+            try
+            {
+                if (_currentOsd == null || !_currentOsd.IsLoaded)
+                {
+                    _currentOsd = new OsdWindow();
+                    _currentOsd.Closed += (s, e) => _currentOsd = null;
+                }
+
+                _currentOsd.ShowOsd("AUDIO PLAYBACK SWITCHED", deviceName, "\uE995");
+            }
+            catch { }
         }
 
         private CancellationTokenSource? _singleClickCts;
@@ -110,8 +169,7 @@ namespace AudioDeviceSwitcher
             var currentDevice = _audioManager.GetDefaultPlaybackDevice();
             if (currentDevice != null)
             {
-                var osd = new OsdWindow();
-                osd.ShowOsd(currentDevice.FullName);
+                ShowDeviceSwitchOsd(currentDevice.FullName);
             }
         }
 
@@ -298,8 +356,9 @@ namespace AudioDeviceSwitcher
             var settingsWindow = new SettingsWindow(_settings, _audioManager);
             settingsWindow.ShowDialog();
             
-            // Re-apply hotkeys based on updated settings
+            // Re-apply settings
             _hotkeyManager?.RegisterHotkeys(_settings.EnableGlobalHotkeys);
+            _trayScrollManager?.SetEnabled(_settings.EnableTrayScrollVolume);
             
             UpdateTrayText();
         }
@@ -312,6 +371,7 @@ namespace AudioDeviceSwitcher
         private void Exit_Click(object? sender, EventArgs e)
         {
             _pollTimer.Stop();
+            _trayScrollManager?.Dispose();
             _trayIcon.Visible = false;
             _hotkeyManager?.Dispose();
             System.Windows.Application.Current?.Shutdown();

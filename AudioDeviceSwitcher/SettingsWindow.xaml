@@ -235,12 +235,23 @@
                             <Border Height="1" Background="#10FFFFFF" Margin="0,0,0,14"/>
 
                             <!-- Global Hotkeys -->
-                            <Grid>
+                            <Grid Margin="0,0,0,14">
                                 <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
                                     <TextBlock Text="Global keyboard shortcuts" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEEEEE"/>
                                     <TextBlock Text="Quick Switch: Ctrl+Shift+S   •   Volume Mixer: Ctrl+Shift+M" FontSize="12" Foreground="#858585" Margin="0,2,0,0"/>
                                 </StackPanel>
                                 <CheckBox x:Name="EnableHotkeysCheck" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <Border Height="1" Background="#10FFFFFF" Margin="0,0,0,14"/>
+
+                            <!-- Scroll on Tray Icon -->
+                            <Grid>
+                                <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+                                    <TextBlock Text="Scroll on tray icon to adjust volume" FontSize="13.5" FontWeight="SemiBold" Foreground="#EEEEEE"/>
+                                    <TextBlock Text="Hover mouse over taskbar tray icon and scroll wheel to change volume" FontSize="12" Foreground="#858585" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <CheckBox x:Name="EnableTrayScrollCheck" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
                         </StackPanel>
                     </Border>

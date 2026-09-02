@@ -14,6 +14,7 @@ namespace AudioDeviceSwitcher
         // New Publication Features
         public bool RunAtStartup { get; set; } = false;
         public bool EnableGlobalHotkeys { get; set; } = false;
+        public bool EnableTrayScrollVolume { get; set; } = true;
         
         // Stored as Keys enum or strings. We'll use strings for easy JSON serialization of WPF Key/Modifier keys
         public string QuickSwitchHotkey { get; set; } = "Ctrl+Shift+S";

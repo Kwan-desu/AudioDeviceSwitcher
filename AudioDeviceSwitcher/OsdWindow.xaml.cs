@@ -101,21 +101,44 @@ namespace AudioDeviceSwitcher
             catch { }
         }
 
-        public async void ShowOsd(string deviceName)
+        private System.Threading.CancellationTokenSource? _hideCts;
+
+        public void ShowOsd(string deviceName)
         {
-            DeviceNameText.Text = deviceName;
+            ShowOsd("AUDIO PLAYBACK SWITCHED", deviceName, "\uE995");
+        }
+
+        public async void ShowOsd(string title, string text, string glyph = "\uE995")
+        {
+            TitleText.Text = title;
+            DeviceNameText.Text = text;
+            GlyphText.Text = glyph;
+
+            _hideCts?.Cancel();
+            _hideCts = new System.Threading.CancellationTokenSource();
+            var token = _hideCts.Token;
+
+            this.BeginAnimation(UIElement.OpacityProperty, null);
             this.Opacity = 1;
             this.Show();
             
-            // Stay on screen for 1.8 seconds then fade out smoothly
-            await Task.Delay(1800);
-            
             try
             {
-                var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
-                fadeOut.Completed += (s, e) => this.Close();
+                // Stay on screen for 1.5 seconds then fade out smoothly
+                await Task.Delay(1500, token);
+                if (token.IsCancellationRequested) return;
+
+                var fadeOut = new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(180));
+                fadeOut.Completed += (s, e) =>
+                {
+                    if (!token.IsCancellationRequested)
+                    {
+                        this.Close();
+                    }
+                };
                 this.BeginAnimation(UIElement.OpacityProperty, fadeOut);
             }
+            catch (TaskCanceledException) { }
             catch
             {
                 this.Close();

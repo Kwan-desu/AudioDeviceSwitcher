@@ -45,12 +45,12 @@
 
             <!-- Accent Icon Circle -->
             <Border Grid.Column="0" Width="38" Height="38" CornerRadius="19" Background="#1A60CDFF" BorderBrush="#3560CDFF" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                <TextBlock Text="&#xE995;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" FontSize="16" Foreground="#60CDFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <TextBlock x:Name="GlyphText" Text="&#xE995;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" FontSize="16" Foreground="#60CDFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             
             <!-- Information -->
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock Text="AUDIO PLAYBACK SWITCHED" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="10.5" FontWeight="SemiBold" Foreground="#888888"/>
+                <TextBlock x:Name="TitleText" Text="AUDIO PLAYBACK SWITCHED" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="10.5" FontWeight="SemiBold" Foreground="#888888"/>
                 <TextBlock x:Name="DeviceNameText" Text="Headphones" FontFamily="Segoe UI Variable Text, Segoe UI" Foreground="#FFFFFF" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
             </StackPanel>
         </Grid>
