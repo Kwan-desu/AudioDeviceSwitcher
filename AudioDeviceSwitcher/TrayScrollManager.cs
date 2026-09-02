@@ -30,18 +30,15 @@ namespace AudioDeviceSwitcher
         [DllImport("shell32.dll", SetLastError = true)]
         private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
 
-        [DllImport("user32.dll")]
-        private static extern bool GetCursorPos(out POINT lpPoint);
-
         [StructLayout(LayoutKind.Sequential)]
-        public struct POINT
+        private struct POINT
         {
             public int X;
             public int Y;
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct RECT
+        private struct RECT
         {
             public int Left;
             public int Top;
@@ -50,7 +47,7 @@ namespace AudioDeviceSwitcher
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct NOTIFYICONIDENTIFIER
+        private struct NOTIFYICONIDENTIFIER
         {
             public uint cbSize;
             public IntPtr hWnd;
@@ -59,7 +56,7 @@ namespace AudioDeviceSwitcher
         }
 
         [StructLayout(LayoutKind.Sequential)]
-        public struct MSLLHOOKSTRUCT
+        private struct MSLLHOOKSTRUCT
         {
             public POINT pt;
             public uint mouseData;
@@ -70,23 +67,60 @@ namespace AudioDeviceSwitcher
         #endregion
 
         private readonly NotifyIcon _notifyIcon;
+        private readonly System.Windows.Threading.Dispatcher _uiDispatcher;
         private IntPtr _hookId = IntPtr.Zero;
-        private readonly LowLevelMouseProc _proc;
+        private readonly LowLevelMouseProc _proc; // Must hold reference to prevent GC collection
         private bool _isEnabled;
 
-        public event Action<int>? Scrolled; // +1 for up, -1 for down
+        // Cached tray icon handle (extracted once to avoid per-scroll reflection)
+        private IntPtr _cachedHwnd = IntPtr.Zero;
+        private uint _cachedUid = 0;
+
+        public event Action<int>? Scrolled; // +1 = louder, -1 = quieter
 
         public TrayScrollManager(NotifyIcon notifyIcon)
         {
             _notifyIcon = notifyIcon;
             _proc = HookCallback;
+            // Capture current dispatcher (UI thread) so we can marshal events back
+            _uiDispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+
+            RefreshIconHandle();
+        }
+
+        /// <summary>Extract the NotifyIcon's hidden HWND and icon-ID via reflection.</summary>
+        private void RefreshIconHandle()
+        {
+            try
+            {
+                var type = typeof(NotifyIcon);
+
+                // 'window' is of type NotifyIcon+NotifyIconNativeWindow which inherits NativeWindow
+                var windowField = type.GetField("window", BindingFlags.NonPublic | BindingFlags.Instance);
+                var windowObj = windowField?.GetValue(_notifyIcon);
+                if (windowObj is NativeWindow nw && nw.Handle != IntPtr.Zero)
+                {
+                    _cachedHwnd = nw.Handle;
+                }
+
+                var idField = type.GetField("id", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (idField?.GetValue(_notifyIcon) is int id)
+                {
+                    _cachedUid = (uint)id;
+                }
+            }
+            catch { }
         }
 
         public void SetEnabled(bool enabled)
         {
             _isEnabled = enabled;
+
             if (enabled && _hookId == IntPtr.Zero)
             {
+                if (_cachedHwnd == IntPtr.Zero)
+                    RefreshIconHandle();
+
                 using var curProcess = Process.GetCurrentProcess();
                 using var curModule = curProcess.MainModule;
                 IntPtr hMod = curModule != null ? GetModuleHandle(curModule.ModuleName) : IntPtr.Zero;
@@ -101,19 +135,29 @@ namespace AudioDeviceSwitcher
 
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
+            // *** This runs on the system hook thread — NOT the UI thread. ***
+            // Keep processing minimal; dispatch all UI work via _uiDispatcher.
             if (nCode >= 0 && (int)wParam == WM_MOUSEWHEEL && _isEnabled)
             {
-                MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                if (IsCursorOverTrayIcon(hookStruct.pt))
+                try
                 {
-                    short delta = (short)((hookStruct.mouseData >> 16) & 0xFFFF);
-                    if (delta != 0)
+                    MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+
+                    if (IsCursorOverTrayIcon(hookStruct.pt))
                     {
-                        int direction = delta > 0 ? 1 : -1;
-                        Scrolled?.Invoke(direction);
-                        return (IntPtr)1; // Handled, prevent propagating scroll
+                        short delta = (short)((hookStruct.mouseData >> 16) & 0xFFFF);
+                        if (delta != 0)
+                        {
+                            int direction = delta > 0 ? 1 : -1;
+
+                            // Marshal to UI thread before touching any WPF/WinForms objects
+                            _uiDispatcher.BeginInvoke(() => Scrolled?.Invoke(direction));
+
+                            return (IntPtr)1; // Consume this wheel message
+                        }
                     }
                 }
+                catch { }
             }
 
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
@@ -121,52 +165,29 @@ namespace AudioDeviceSwitcher
 
         private bool IsCursorOverTrayIcon(POINT pt)
         {
-            var (hWnd, uID) = GetNotifyIconIdentifier(_notifyIcon);
-            if (hWnd == IntPtr.Zero) return false;
+            if (_cachedHwnd == IntPtr.Zero)
+                RefreshIconHandle();
+
+            if (_cachedHwnd == IntPtr.Zero)
+                return false;
 
             var nid = new NOTIFYICONIDENTIFIER
             {
                 cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONIDENTIFIER)),
-                hWnd = hWnd,
-                uID = uID,
+                hWnd = _cachedHwnd,
+                uID = _cachedUid,
                 guidItem = Guid.Empty
             };
 
             int hr = Shell_NotifyIconGetRect(ref nid, out RECT rect);
-            if (hr == 0) // S_OK
+            if (hr == 0) // S_OK — icon is visible in the notification area
             {
                 return pt.X >= rect.Left && pt.X <= rect.Right &&
-                       pt.Y >= rect.Top && pt.Y <= rect.Bottom;
+                       pt.Y >= rect.Top  && pt.Y <= rect.Bottom;
             }
 
+            // S_FALSE (0x1) means icon is hidden in overflow chevron — not visible
             return false;
-        }
-
-        private static (IntPtr hWnd, uint uID) GetNotifyIconIdentifier(NotifyIcon notifyIcon)
-        {
-            IntPtr hWnd = IntPtr.Zero;
-            uint uID = 0;
-
-            try
-            {
-                var type = typeof(NotifyIcon);
-                var windowField = type.GetField("window", BindingFlags.NonPublic | BindingFlags.Instance)
-                               ?? type.GetField("_window", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (windowField?.GetValue(notifyIcon) is NativeWindow nw)
-                {
-                    hWnd = nw.Handle;
-                }
-
-                var idField = type.GetField("id", BindingFlags.NonPublic | BindingFlags.Instance)
-                           ?? type.GetField("_id", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (idField?.GetValue(notifyIcon) is int id)
-                {
-                    uID = (uint)id;
-                }
-            }
-            catch { }
-
-            return (hWnd, uID);
         }
 
         public void Dispose()
