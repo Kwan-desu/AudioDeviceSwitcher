@@ -1,116 +1,89 @@
 using System;
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace AudioDeviceSwitcher
 {
+    /// <summary>
+    /// Installs a global low-level mouse hook and fires <see cref="Scrolled"/>
+    /// when the user scrolls while the cursor is over the notification-area tray icon.
+    ///
+    /// Hover detection uses <see cref="NotifyIcon.MouseMove"/> (reliable, no
+    /// fragile Shell_NotifyIconGetRect P/Invoke). A background timer clears the
+    /// hover flag 1.5 s after the last MouseMove fires so slow scrollers still work.
+    /// </summary>
     public class TrayScrollManager : IDisposable
     {
-        #region Win32 P/Invoke & Structures
+        #region Win32 P/Invoke
         private const int WH_MOUSE_LL = 14;
         private const int WM_MOUSEWHEEL = 0x020A;
 
         private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("user32.dll")]
         private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("kernel32.dll", SetLastError = true)]
         private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-        [DllImport("shell32.dll", SetLastError = true)]
-        private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct POINT
-        {
-            public int X;
-            public int Y;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct RECT
-        {
-            public int Left;
-            public int Top;
-            public int Right;
-            public int Bottom;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct NOTIFYICONIDENTIFIER
-        {
-            public uint cbSize;
-            public IntPtr hWnd;
-            public uint uID;
-            public Guid guidItem;
-        }
 
         [StructLayout(LayoutKind.Sequential)]
         private struct MSLLHOOKSTRUCT
         {
-            public POINT pt;
+            public int ptX, ptY;
             public uint mouseData;
-            public uint flags;
-            public uint time;
+            public uint flags, time;
             public IntPtr dwExtraInfo;
         }
         #endregion
 
         private readonly NotifyIcon _notifyIcon;
         private readonly System.Windows.Threading.Dispatcher _uiDispatcher;
+        private readonly LowLevelMouseProc _proc; // must be kept alive to prevent GC
+
         private IntPtr _hookId = IntPtr.Zero;
-        private readonly LowLevelMouseProc _proc; // Must hold reference to prevent GC collection
         private bool _isEnabled;
 
-        // Cached tray icon handle (extracted once to avoid per-scroll reflection)
-        private IntPtr _cachedHwnd = IntPtr.Zero;
-        private uint _cachedUid = 0;
+        // True while the cursor is hovering over the tray icon.
+        // Set by NotifyIcon.MouseMove; cleared by a 1.5 s timer after no movement.
+        private volatile bool _isCursorOverIcon = false;
+        private System.Threading.Timer? _hoverClearTimer;
 
-        public event Action<int>? Scrolled; // +1 = louder, -1 = quieter
+        public event Action<int>? Scrolled; // +1 louder, -1 quieter
 
         public TrayScrollManager(NotifyIcon notifyIcon)
         {
             _notifyIcon = notifyIcon;
             _proc = HookCallback;
-            // Capture current dispatcher (UI thread) so we can marshal events back
             _uiDispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
 
-            RefreshIconHandle();
+            // MouseMove fires whenever the cursor is on the icon — no HWND magic needed
+            _notifyIcon.MouseMove += NotifyIcon_MouseMove;
         }
 
-        /// <summary>Extract the NotifyIcon's hidden HWND and icon-ID via reflection.</summary>
-        private void RefreshIconHandle()
+        // ── Hover tracking ──────────────────────────────────────────────────────
+
+        private void NotifyIcon_MouseMove(object? sender, MouseEventArgs e)
         {
-            try
-            {
-                var type = typeof(NotifyIcon);
-
-                // 'window' is of type NotifyIcon+NotifyIconNativeWindow which inherits NativeWindow
-                var windowField = type.GetField("window", BindingFlags.NonPublic | BindingFlags.Instance);
-                var windowObj = windowField?.GetValue(_notifyIcon);
-                if (windowObj is NativeWindow nw && nw.Handle != IntPtr.Zero)
-                {
-                    _cachedHwnd = nw.Handle;
-                }
-
-                var idField = type.GetField("id", BindingFlags.NonPublic | BindingFlags.Instance);
-                if (idField?.GetValue(_notifyIcon) is int id)
-                {
-                    _cachedUid = (uint)id;
-                }
-            }
-            catch { }
+            _isCursorOverIcon = true;
+            // Extend/reset the auto-clear timer on every move event
+            _hoverClearTimer?.Change(1500, System.Threading.Timeout.Infinite);
         }
+
+        private void ClearHover()
+        {
+            _isCursorOverIcon = false;
+        }
+
+        // ── Hook lifecycle ───────────────────────────────────────────────────────
 
         public void SetEnabled(bool enabled)
         {
@@ -118,11 +91,14 @@ namespace AudioDeviceSwitcher
 
             if (enabled && _hookId == IntPtr.Zero)
             {
-                if (_cachedHwnd == IntPtr.Zero)
-                    RefreshIconHandle();
+                // Lazily create the timer (fires once after 1.5 s of no MouseMove)
+                _hoverClearTimer ??= new System.Threading.Timer(_ => ClearHover(),
+                                                                null,
+                                                                System.Threading.Timeout.Infinite,
+                                                                System.Threading.Timeout.Infinite);
 
                 using var curProcess = Process.GetCurrentProcess();
-                using var curModule = curProcess.MainModule;
+                using var curModule  = curProcess.MainModule;
                 IntPtr hMod = curModule != null ? GetModuleHandle(curModule.ModuleName) : IntPtr.Zero;
                 _hookId = SetWindowsHookEx(WH_MOUSE_LL, _proc, hMod, 0);
             }
@@ -130,65 +106,35 @@ namespace AudioDeviceSwitcher
             {
                 UnhookWindowsHookEx(_hookId);
                 _hookId = IntPtr.Zero;
+                _isCursorOverIcon = false;
             }
         }
 
+        // ── Hook callback (runs on the Windows hook thread — NOT the UI thread) ─
+
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            // *** This runs on the system hook thread — NOT the UI thread. ***
-            // Keep processing minimal; dispatch all UI work via _uiDispatcher.
-            if (nCode >= 0 && (int)wParam == WM_MOUSEWHEEL && _isEnabled)
+            if (nCode >= 0 && (int)wParam == WM_MOUSEWHEEL && _isEnabled && _isCursorOverIcon)
             {
                 try
                 {
-                    MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-
-                    if (IsCursorOverTrayIcon(hookStruct.pt))
+                    var s = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
+                    short delta = (short)((s.mouseData >> 16) & 0xFFFF);
+                    if (delta != 0)
                     {
-                        short delta = (short)((hookStruct.mouseData >> 16) & 0xFFFF);
-                        if (delta != 0)
-                        {
-                            int direction = delta > 0 ? 1 : -1;
-
-                            // Marshal to UI thread before touching any WPF/WinForms objects
-                            _uiDispatcher.BeginInvoke(() => Scrolled?.Invoke(direction));
-
-                            return (IntPtr)1; // Consume this wheel message
-                        }
+                        int direction = delta > 0 ? 1 : -1;
+                        // Marshal to UI thread before touching any WPF / audio objects
+                        _uiDispatcher.BeginInvoke(() => Scrolled?.Invoke(direction));
+                        return (IntPtr)1; // Consume — prevent the event reaching other windows
                     }
                 }
-                catch { }
+                catch { /* never throw inside a hook callback */ }
             }
 
             return CallNextHookEx(_hookId, nCode, wParam, lParam);
         }
 
-        private bool IsCursorOverTrayIcon(POINT pt)
-        {
-            if (_cachedHwnd == IntPtr.Zero)
-                RefreshIconHandle();
-
-            if (_cachedHwnd == IntPtr.Zero)
-                return false;
-
-            var nid = new NOTIFYICONIDENTIFIER
-            {
-                cbSize = (uint)Marshal.SizeOf(typeof(NOTIFYICONIDENTIFIER)),
-                hWnd = _cachedHwnd,
-                uID = _cachedUid,
-                guidItem = Guid.Empty
-            };
-
-            int hr = Shell_NotifyIconGetRect(ref nid, out RECT rect);
-            if (hr == 0) // S_OK — icon is visible in the notification area
-            {
-                return pt.X >= rect.Left && pt.X <= rect.Right &&
-                       pt.Y >= rect.Top  && pt.Y <= rect.Bottom;
-            }
-
-            // S_FALSE (0x1) means icon is hidden in overflow chevron — not visible
-            return false;
-        }
+        // ── IDisposable ──────────────────────────────────────────────────────────
 
         public void Dispose()
         {
@@ -197,6 +143,9 @@ namespace AudioDeviceSwitcher
                 UnhookWindowsHookEx(_hookId);
                 _hookId = IntPtr.Zero;
             }
+
+            _hoverClearTimer?.Dispose();
+            _notifyIcon.MouseMove -= NotifyIcon_MouseMove;
         }
     }
 }
