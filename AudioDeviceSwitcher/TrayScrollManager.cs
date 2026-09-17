@@ -35,6 +35,28 @@ namespace AudioDeviceSwitcher
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetCursorPos(out POINT lpPoint);
+
+        [DllImport("shell32.dll", SetLastError = true)]
+        private static extern int Shell_NotifyIconGetRect(ref NOTIFYICONIDENTIFIER identifier, out RECT iconLocation);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT { public int X, Y; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT { public int Left, Top, Right, Bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NOTIFYICONIDENTIFIER
+        {
+            public uint cbSize;
+            public IntPtr hWnd;
+            public uint uID;
+            public Guid guidItem;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         private struct MSLLHOOKSTRUCT
         {
@@ -74,8 +96,80 @@ namespace AudioDeviceSwitcher
         private void NotifyIcon_MouseMove(object? sender, MouseEventArgs e)
         {
             _isCursorOverIcon = true;
-            // Extend/reset the auto-clear timer on every move event
-            _hoverClearTimer?.Change(1500, System.Threading.Timeout.Infinite);
+            // Extend/reset the auto-clear timer on every move event.
+            // Short window so leaving the icon stops volume-scroll almost immediately.
+            _hoverClearTimer?.Change(300, System.Threading.Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Authoritative check: is the cursor physically inside the tray icon's rectangle right now?
+        /// Uses Shell_NotifyIconGetRect (needs the NotifyIcon's private HWND + id, obtained via
+        /// reflection). Falls back to the MouseMove-recency flag if reflection/rect lookup fails.
+        /// </summary>
+        private bool IsCursorReallyOverIcon()
+        {
+            try
+            {
+                if (!TryGetIconIdentity(out IntPtr hWnd, out uint id) || hWnd == IntPtr.Zero)
+                    return _isCursorOverIcon; // fallback
+
+                var nid = new NOTIFYICONIDENTIFIER
+                {
+                    cbSize = (uint)Marshal.SizeOf<NOTIFYICONIDENTIFIER>(),
+                    hWnd = hWnd,
+                    uID = id
+                };
+
+                if (Shell_NotifyIconGetRect(ref nid, out RECT r) != 0)
+                    return _isCursorOverIcon; // HRESULT != S_OK → fallback
+
+                if (!GetCursorPos(out POINT p)) return _isCursorOverIcon;
+
+                return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom;
+            }
+            catch
+            {
+                return _isCursorOverIcon;
+            }
+        }
+
+        private IntPtr _cachedHwnd = IntPtr.Zero;
+        private uint _cachedId;
+        private bool _identityResolved;
+
+        private bool TryGetIconIdentity(out IntPtr hWnd, out uint id)
+        {
+            if (_identityResolved)
+            {
+                hWnd = _cachedHwnd;
+                id = _cachedId;
+                return _cachedHwnd != IntPtr.Zero;
+            }
+
+            hWnd = IntPtr.Zero;
+            id = 0;
+            try
+            {
+                var t = typeof(NotifyIcon);
+                var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+
+                // NotifyIcon.window is a NativeWindow whose Handle is the message window.
+                var windowField = t.GetField("window", flags);
+                var window = windowField?.GetValue(_notifyIcon) as NativeWindow;
+                var idField = t.GetField("id", flags);
+
+                if (window != null && idField != null)
+                {
+                    hWnd = window.Handle;
+                    id = (uint)(int)(idField.GetValue(_notifyIcon) ?? 0);
+                }
+            }
+            catch { }
+
+            _cachedHwnd = hWnd;
+            _cachedId = id;
+            _identityResolved = true;
+            return hWnd != IntPtr.Zero;
         }
 
         private void ClearHover()
@@ -114,7 +208,7 @@ namespace AudioDeviceSwitcher
 
         private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            if (nCode >= 0 && (int)wParam == WM_MOUSEWHEEL && _isEnabled && _isCursorOverIcon)
+            if (nCode >= 0 && (int)wParam == WM_MOUSEWHEEL && _isEnabled && _isCursorOverIcon && IsCursorReallyOverIcon())
             {
                 try
                 {

@@ -25,17 +25,18 @@ namespace AudioDeviceSwitcher
         public List<Guid> MixerDeviceIds { get; set; } = new List<Guid>();
         public Dictionary<string, string> DeviceLabels { get; set; } = new Dictionary<string, string>();
 
-        // New Publication Features
         public bool RunAtStartup { get; set; } = false;
-        public bool EnableGlobalHotkeys { get; set; } = false;
+        public bool EnableGlobalHotkeys { get; set; } = true;
         public bool EnableTrayScrollVolume { get; set; } = true;
-        
-        // Stored as Keys enum or strings. We'll use strings for easy JSON serialization of WPF Key/Modifier keys
+
         public string QuickSwitchHotkey { get; set; } = "Ctrl+Shift+S";
         public string OpenMixerHotkey { get; set; } = "Ctrl+Shift+M";
 
         // Theme preference: "System" (default), "Light", or "Dark".
         public string Theme { get; set; } = "System";
+
+        // Backdrop preference: "Mica" (default), "MicaAlt", or "Acrylic"
+        public string Backdrop { get; set; } = "Mica";
 
         private static string GetConfigPath()
         {
@@ -101,6 +102,7 @@ namespace AudioDeviceSwitcher
             }
             else
             {
+                ConfiguredDevices.RemoveAll(d => string.IsNullOrWhiteSpace(d.FullName) && string.IsNullOrWhiteSpace(d.Name));
                 SyncLegacyCollections();
             }
         }
@@ -166,7 +168,7 @@ namespace AudioDeviceSwitcher
 
                 if (match != null)
                 {
-                    // If device reconnected with a different endpoint GUID, update it!
+                    // If device reconnected with a different endpoint GUID, update it
                     if (match.Id != activeDev.Id)
                     {
                         Guid oldId = match.Id;
@@ -221,6 +223,21 @@ namespace AudioDeviceSwitcher
                         changed = true;
                     }
                 }
+                else
+                {
+                    var newConf = new ConfiguredDevice
+                    {
+                        Id = activeDev.Id,
+                        FullName = activeDev.FullName ?? string.Empty,
+                        InterfaceName = activeDev.InterfaceName ?? string.Empty,
+                        Name = activeDev.Name ?? string.Empty,
+                        QuickSwitch = true,
+                        Mixer = true,
+                        CustomLabel = string.Empty
+                    };
+                    ConfiguredDevices.Add(newConf);
+                    changed = true;
+                }
             }
 
             if (changed)
@@ -229,6 +246,34 @@ namespace AudioDeviceSwitcher
             }
 
             return changed;
+        }
+
+        public bool MoveDevice(int fromIndex, int toIndex)
+        {
+            if (fromIndex < 0 || fromIndex >= ConfiguredDevices.Count ||
+                toIndex < 0 || toIndex >= ConfiguredDevices.Count ||
+                fromIndex == toIndex)
+            {
+                return false;
+            }
+
+            var item = ConfiguredDevices[fromIndex];
+            ConfiguredDevices.RemoveAt(fromIndex);
+            ConfiguredDevices.Insert(toIndex, item);
+
+            SyncLegacyCollections();
+            Save();
+            return true;
+        }
+
+        public bool MoveDeviceUp(int index)
+        {
+            return MoveDevice(index, index - 1);
+        }
+
+        public bool MoveDeviceDown(int index)
+        {
+            return MoveDevice(index, index + 1);
         }
 
         public void UpdateOrAddDevice(Guid id, string fullName, string interfaceName, string name, bool quickSwitch, bool mixer, string customLabel)

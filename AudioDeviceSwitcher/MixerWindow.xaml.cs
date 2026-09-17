@@ -25,51 +25,12 @@ namespace AudioDeviceSwitcher
 {
     public partial class MixerWindow : Window
     {
-        #region Acrylic Blur Interop
-        [DllImport("user32.dll")]
-        private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
-
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-        private const int DWMWCP_ROUND = 2;
-
-        private enum AccentState
-        {
-            ACCENT_DISABLED = 0,
-            ACCENT_ENABLE_GRADIENT = 1,
-            ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
-            ACCENT_ENABLE_BLURBEHIND = 3,
-            ACCENT_ENABLE_ACRYLICBLURBEHIND = 4,
-            ACCENT_ENABLE_HOSTBACKDROP = 5
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct AccentPolicy
-        {
-            public AccentState AccentState;
-            public int AccentFlags;
-            public int GradientColor;
-            public int AnimationId;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct WindowCompositionAttributeData
-        {
-            public int Attribute;
-            public IntPtr Data;
-            public int SizeOfData;
-        }
-
-        private const int WCA_ACCENT_POLICY = 19;
-        #endregion
-
         private AudioDeviceManager _audioManager;
         private AppSettings _settings;
         private TrayApplicationContext _context;
         private DispatcherTimer _refreshTimer;
+        // Sessions the user just toggled — don't let the 1s refresh revert them immediately.
+        private readonly Dictionary<string, DateTime> _recentSessionChange = new();
 
         public MixerWindow(AudioDeviceManager audioManager, AppSettings settings, TrayApplicationContext context)
         {
@@ -86,46 +47,137 @@ namespace AudioDeviceSwitcher
             _refreshTimer.Tick += (s, e) => RefreshDeviceStates();
             _refreshTimer.Start();
 
+            _audioManager.DevicesChanged += OnAudioDevicesChanged;
+
             this.SourceInitialized += MixerWindow_SourceInitialized;
             this.Deactivated += (s, e) => this.Close();
-            this.Closed += (s, e) => _refreshTimer.Stop();
-            this.KeyDown += (s, e) => { if (e.Key == Key.Escape) this.Close(); };
+            this.Closed += (s, e) =>
+            {
+                _refreshTimer.Stop();
+                _audioManager.DevicesChanged -= OnAudioDevicesChanged;
+            };
+            this.KeyDown += MixerWindow_KeyDown;
+        }
+
+        private void OnAudioDevicesChanged()
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (this.IsLoaded)
+                {
+                    LoadDevices();
+                }
+            });
+        }
+
+        // ── Keyboard navigation ──────────────────────────────────────────────
+        // Up/Down: move selection • Enter/Space: set default • +/-: volume • M: mute • Esc: close
+        private int _focusIndex = -1;
+
+        private void MixerWindow_KeyDown(object? sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape) { this.Close(); return; }
+
+            int count = DeviceCardsContainer.Children.Count;
+            if (count == 0) return;
+
+            switch (e.Key)
+            {
+                case Key.Down:
+                    _focusIndex = (_focusIndex + 1) % count;
+                    HighlightFocusedCard();
+                    e.Handled = true;
+                    break;
+                case Key.Up:
+                    _focusIndex = (_focusIndex - 1 + count) % count;
+                    HighlightFocusedCard();
+                    e.Handled = true;
+                    break;
+                case Key.Enter:
+                case Key.Space:
+                    InvokeFocusedCard();
+                    e.Handled = true;
+                    break;
+                case Key.Add:
+                case Key.OemPlus:
+                    NudgeFocusedVolume(+4);
+                    e.Handled = true;
+                    break;
+                case Key.Subtract:
+                case Key.OemMinus:
+                    NudgeFocusedVolume(-4);
+                    e.Handled = true;
+                    break;
+                case Key.M:
+                    ToggleFocusedMute();
+                    e.Handled = true;
+                    break;
+            }
+        }
+
+        private Border? FocusedCard =>
+            (_focusIndex >= 0 && _focusIndex < DeviceCardsContainer.Children.Count)
+                ? DeviceCardsContainer.Children[_focusIndex] as Border : null;
+
+        private void HighlightFocusedCard()
+        {
+            for (int i = 0; i < DeviceCardsContainer.Children.Count; i++)
+            {
+                if (DeviceCardsContainer.Children[i] is Border b)
+                {
+                    b.BorderBrush = (Brush)FindResource(i == _focusIndex ? "AccentBrush" : "StrokeBrush");
+                    b.BorderThickness = new Thickness(i == _focusIndex ? 1.5 : 1);
+                }
+            }
+        }
+
+        private void InvokeFocusedCard()
+        {
+            if (FocusedCard?.Tag is Guid id)
+            {
+                var dev = _audioManager.GetActivePlaybackDevices().FirstOrDefault(d => d.Id == id);
+                if (dev != null)
+                {
+                    dev.SetAsDefault();
+                    _context.UpdateTrayText();
+                    LoadDevices();
+                    HighlightFocusedCard();
+                }
+            }
+        }
+
+        private void NudgeFocusedVolume(int delta)
+        {
+            if (FocusedCard?.Tag is Guid id)
+            {
+                var dev = _audioManager.GetActivePlaybackDevices().FirstOrDefault(d => d.Id == id);
+                if (dev != null)
+                {
+                    dev.Volume = Math.Clamp(dev.Volume + delta, 0, 100);
+                    if (dev.IsMuted && dev.Volume > 0) dev.Mute(false);
+                    _context.UpdateTrayText();
+                }
+            }
+        }
+
+        private void ToggleFocusedMute()
+        {
+            if (FocusedCard?.Tag is Guid id)
+            {
+                var dev = _audioManager.GetActivePlaybackDevices().FirstOrDefault(d => d.Id == id);
+                if (dev != null)
+                {
+                    dev.ToggleMute();
+                    _context.UpdateTrayText();
+                }
+            }
         }
 
         private void MixerWindow_SourceInitialized(object? sender, EventArgs e)
         {
-            try
-            {
-                var handle = new WindowInteropHelper(this).Handle;
-
-                int darkMode = 1;
-                DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
-
-                int cornerPreference = DWMWCP_ROUND;
-                DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(int));
-
-                var accent = new AccentPolicy
-                {
-                    AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
-                    AccentFlags = 2,
-                    GradientColor = unchecked((int)0x33101010) // 20% dark tint for true glass transparency
-                };
-
-                int accentStructSize = Marshal.SizeOf(accent);
-                IntPtr accentPtr = Marshal.AllocHGlobal(accentStructSize);
-                Marshal.StructureToPtr(accent, accentPtr, false);
-
-                var data = new WindowCompositionAttributeData
-                {
-                    Attribute = WCA_ACCENT_POLICY,
-                    Data = accentPtr,
-                    SizeOfData = accentStructSize
-                };
-
-                SetWindowCompositionAttribute(handle, ref data);
-                Marshal.FreeHGlobal(accentPtr);
-            }
-            catch { }
+            // Mixer is a transient flyout → Acrylic per Fluent materials guidance.
+            WindowBackdrop.Apply(this, WindowBackdrop.BackdropKind.Acrylic, ThemeManager.IsDark,
+                legacyTint: unchecked((int)0x33101010));
         }
 
         private void PositionWindow()
@@ -141,16 +193,23 @@ namespace AudioDeviceSwitcher
             AppSessionsContainer.Children.Clear();
 
             var allDevices = _audioManager.GetActivePlaybackDevices();
+            _settings.SyncActiveDevices(allDevices);
             var defaultDevice = _audioManager.GetDefaultPlaybackDevice();
 
             List<CoreAudioDevice> targetDevices;
             if (_settings.MixerDeviceIds.Count > 0)
             {
-                targetDevices = allDevices.Where(d => _settings.MixerDeviceIds.Contains(d.Id)).ToList();
+                targetDevices = allDevices.Where(d =>
+                    _settings.MixerDeviceIds.Contains(d.Id) ||
+                    _settings.ConfiguredDevices.Any(c => c.Mixer && (c.Id == d.Id || (!string.IsNullOrWhiteSpace(c.FullName) && string.Equals(c.FullName, d.FullName, StringComparison.OrdinalIgnoreCase))))
+                ).ToList();
             }
             else if (_settings.SelectedDeviceIds.Count > 0)
             {
-                targetDevices = allDevices.Where(d => _settings.SelectedDeviceIds.Contains(d.Id)).ToList();
+                targetDevices = allDevices.Where(d =>
+                    _settings.SelectedDeviceIds.Contains(d.Id) ||
+                    _settings.ConfiguredDevices.Any(c => c.QuickSwitch && (c.Id == d.Id || (!string.IsNullOrWhiteSpace(c.FullName) && string.Equals(c.FullName, d.FullName, StringComparison.OrdinalIgnoreCase))))
+                ).ToList();
             }
             else
             {
@@ -161,6 +220,8 @@ namespace AudioDeviceSwitcher
             {
                 targetDevices = allDevices;
             }
+
+            EmptyState.Visibility = targetDevices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
             foreach (var device in targetDevices)
             {
@@ -196,13 +257,13 @@ namespace AudioDeviceSwitcher
 
         private Border CreateAppSessionCard(AudioSwitcher.AudioApi.Session.IAudioSession session)
         {
-            var defaultBrush = new SolidColorBrush(Color.FromArgb(12, 255, 255, 255));
-            var hoverBrush = new SolidColorBrush(Color.FromArgb(22, 255, 255, 255));
-            var borderBrush = new SolidColorBrush(Color.FromArgb(16, 255, 255, 255));
+            var defaultBrush = (Brush)FindResource("CardBrush");
+            var hoverBrush = (Brush)FindResource("CardHoverBrush");
+            var borderBrush = (Brush)FindResource("StrokeBrush");
 
             var cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(7),
+                CornerRadius = new CornerRadius(8),
                 Background = defaultBrush,
                 BorderBrush = borderBrush,
                 BorderThickness = new Thickness(1),
@@ -278,8 +339,8 @@ namespace AudioDeviceSwitcher
             {
                 Text = appName,
                 FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
-                FontSize = 13,
-                Foreground = new SolidColorBrush(Color.FromRgb(235, 235, 235)),
+                FontSize = 14,
+                Foreground = (Brush)FindResource("TextPrimaryBrush"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = appName
@@ -302,7 +363,7 @@ namespace AudioDeviceSwitcher
                 Content = session.IsMuted ? "\uE74F" : "\uE995",
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"),
                 FontSize = 14,
-                Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220)),
+                Foreground = (Brush)FindResource(session.IsMuted ? "DangerBrush" : "IconBrush"),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Width = 28,
@@ -328,7 +389,7 @@ namespace AudioDeviceSwitcher
                 Text = $"{(int)session.Volume}",
                 FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
                 FontSize = 12.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 210)),
+                Foreground = (Brush)FindResource("TextSecondaryBrush"),
                 Width = 34,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -357,9 +418,13 @@ namespace AudioDeviceSwitcher
 
             muteButton.Click += (s, e) =>
             {
-                session.IsMuted = !session.IsMuted;
-                muteButton.Content = session.IsMuted ? "\uE74F" : "\uE995";
-                muteButton.Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220));
+                bool newMuted = !session.IsMuted;
+                try { session.IsMuted = newMuted; }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[Mixer] session mute failed: {ex.Message}"); }
+                _recentSessionChange[session.Id] = DateTime.UtcNow;
+                muteButton.Content = newMuted ? "\uE74F" : "\uE995";
+                muteButton.Foreground = (Brush)FindResource(newMuted ? "DangerBrush" : "IconBrush");
+                e.Handled = true;
             };
 
             slider.ValueChanged += (s, e) =>
@@ -370,7 +435,7 @@ namespace AudioDeviceSwitcher
                 {
                     session.IsMuted = false;
                     muteButton.Content = "\uE995";
-                    muteButton.Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220));
+                    muteButton.Foreground = (Brush)FindResource("IconBrush");
                 }
             };
 
@@ -393,13 +458,14 @@ namespace AudioDeviceSwitcher
 
         private Border CreateDeviceCard(CoreAudioDevice device, bool isDefault)
         {
-            var defaultBg = isDefault ? new SolidColorBrush(Color.FromArgb(28, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(12, 255, 255, 255));
-            var hoverBg = isDefault ? new SolidColorBrush(Color.FromArgb(42, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(22, 255, 255, 255));
-            var borderBrush = isDefault ? new SolidColorBrush(Color.FromArgb(70, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(16, 255, 255, 255));
+            var accent = ThemeManager.Accent;
+            var defaultBg = isDefault ? (Brush)FindResource("AccentCardBrush") : (Brush)FindResource("CardBrush");
+            var hoverBg = isDefault ? (Brush)FindResource("AccentCardHoverBrush") : (Brush)FindResource("CardHoverBrush");
+            var borderBrush = isDefault ? (Brush)FindResource("AccentStrokeBrush") : (Brush)FindResource("StrokeBrush");
 
             var cardBorder = new Border
             {
-                CornerRadius = new CornerRadius(7),
+                CornerRadius = new CornerRadius(8),
                 Background = defaultBg,
                 BorderBrush = borderBrush,
                 BorderThickness = new Thickness(1),
@@ -423,9 +489,9 @@ namespace AudioDeviceSwitcher
             {
                 Text = device.FullName,
                 FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
-                FontSize = 13.5,
+                FontSize = 14,
                 FontWeight = isDefault ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = new SolidColorBrush(isDefault ? Color.FromRgb(255, 255, 255) : Color.FromRgb(230, 230, 230)),
+                Foreground = (Brush)FindResource(isDefault ? "TextPrimaryBrush" : "TextSecondaryBrush"),
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = device.FullName
@@ -439,9 +505,9 @@ namespace AudioDeviceSwitcher
                 var accentPill = new Border
                 {
                     Width = 3,
-                    Height = 13,
+                    Height = 14,
                     CornerRadius = new CornerRadius(1.5),
-                    Background = new SolidColorBrush(Color.FromRgb(96, 205, 255)),
+                    Background = (Brush)FindResource("AccentBrush"),
                     Margin = new Thickness(0, 0, 8, 0),
                     VerticalAlignment = VerticalAlignment.Center
                 };
@@ -469,7 +535,7 @@ namespace AudioDeviceSwitcher
                 Content = device.IsMuted ? "\uE74F" : "\uE995",
                 FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"),
                 FontSize = 14,
-                Foreground = new SolidColorBrush(device.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220)),
+                Foreground = (Brush)FindResource(device.IsMuted ? "DangerBrush" : "IconBrush"),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Width = 28,
@@ -496,7 +562,7 @@ namespace AudioDeviceSwitcher
                 FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
                 FontSize = 12.5,
                 FontWeight = FontWeights.Normal,
-                Foreground = new SolidColorBrush(Color.FromRgb(210, 210, 210)),
+                Foreground = (Brush)FindResource("TextSecondaryBrush"),
                 Width = 34,
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -544,7 +610,7 @@ namespace AudioDeviceSwitcher
             {
                 device.ToggleMute();
                 muteButton.Content = device.IsMuted ? "\uE74F" : "\uE995";
-                muteButton.Foreground = new SolidColorBrush(device.IsMuted ? Color.FromRgb(255, 90, 90) : Color.FromRgb(220, 220, 220));
+                muteButton.Foreground = (Brush)FindResource(device.IsMuted ? "DangerBrush" : "IconBrush");
                 _context.UpdateTrayText();
             };
 
@@ -556,7 +622,7 @@ namespace AudioDeviceSwitcher
                 {
                     device.Mute(false);
                     muteButton.Content = "\uE995";
-                    muteButton.Foreground = new SolidColorBrush(Color.FromRgb(220, 220, 220));
+                    muteButton.Foreground = (Brush)FindResource("IconBrush");
                 }
                 _context.UpdateTrayText();
             };
@@ -653,8 +719,8 @@ namespace AudioDeviceSwitcher
                     if (dev != null)
                     {
                         bool isDef = defaultDevice != null && dev.Id == defaultDevice.Id;
-                        card.Background = isDef ? new SolidColorBrush(Color.FromArgb(28, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(12, 255, 255, 255));
-                        card.BorderBrush = isDef ? new SolidColorBrush(Color.FromArgb(70, 96, 205, 255)) : new SolidColorBrush(Color.FromArgb(16, 255, 255, 255));
+                        card.Background = (Brush)FindResource(isDef ? "AccentCardBrush" : "CardBrush");
+                        card.BorderBrush = (Brush)FindResource(isDef ? "AccentStrokeBrush" : "StrokeBrush");
                     }
                 }
             }
@@ -696,8 +762,15 @@ namespace AudioDeviceSwitcher
 
                                 if (muteBtn != null)
                                 {
-                                    muteBtn.Content = session.IsMuted ? "\uE74F" : "\uE995";
-                                    muteBtn.Foreground = new SolidColorBrush(session.IsMuted ? Color.FromRgb(255, 90, 90) : Colors.White);
+                                    // Skip if the user toggled this session in the last 1.5s
+                                    // (lets the mute state settle without the timer fighting it).
+                                    bool recentlyChanged = _recentSessionChange.TryGetValue(session.Id, out var t)
+                                                           && (DateTime.UtcNow - t).TotalMilliseconds < 1500;
+                                    if (!recentlyChanged)
+                                    {
+                                        muteBtn.Content = session.IsMuted ? "\uE74F" : "\uE995";
+                                        muteBtn.Foreground = (Brush)FindResource(session.IsMuted ? "DangerBrush" : "IconBrush");
+                                    }
                                 }
                             }
                         }

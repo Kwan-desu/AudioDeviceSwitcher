@@ -1,7 +1,7 @@
 <Window x:Class="AudioDeviceSwitcher.OsdWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="OSD" Height="70" Width="330"
+        Title="OSD" Height="76" Width="330"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -35,23 +35,51 @@
         </EventTrigger>
     </Window.Triggers>
 
-    <!-- Frosted Acrylic HUD Pill -->
-    <Border CornerRadius="12" Background="#E6161616" BorderBrush="#25FFFFFF" BorderThickness="1">
-        <Grid Margin="14,10,16,10">
+    <!-- Acrylic HUD pill (transient surface → Acrylic per Fluent materials guidance).
+         8px radius container; inner fill is a fallback for the legacy blur path. -->
+    <Border CornerRadius="{DynamicResource OverlayCornerRadius}"
+            Background="{DynamicResource OsdFillBrush}"
+            BorderBrush="{DynamicResource StrokeStrongBrush}"
+            BorderThickness="1">
+        <Grid Margin="16,12,16,12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Accent Icon Circle -->
-            <Border Grid.Column="0" Width="38" Height="38" CornerRadius="19" Background="#1A60CDFF" BorderBrush="#3560CDFF" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,12,0">
-                <TextBlock x:Name="GlyphText" Text="&#xE995;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol" FontSize="16" Foreground="#60CDFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <!-- Accent icon circle -->
+            <Border Grid.Column="0" Width="40" Height="40" CornerRadius="20"
+                    Background="{DynamicResource AccentCardBrush}"
+                    BorderBrush="{DynamicResource AccentStrokeBrush}" BorderThickness="1"
+                    VerticalAlignment="Center" Margin="0,0,12,0">
+                <TextBlock x:Name="GlyphText" Text="&#xE995;"
+                           FontFamily="{DynamicResource FontFamilyIcons}"
+                           FontSize="16" Foreground="{DynamicResource AccentBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            
+
             <!-- Information -->
             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                <TextBlock x:Name="TitleText" Text="AUDIO PLAYBACK SWITCHED" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="10.5" FontWeight="SemiBold" Foreground="#888888"/>
-                <TextBlock x:Name="DeviceNameText" Text="Headphones" FontFamily="Segoe UI Variable Text, Segoe UI" Foreground="#FFFFFF" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
+                <!-- Caption 12px (was 10.5 — below the 12px legibility floor) -->
+                <TextBlock x:Name="TitleText" Text="Audio playback switched"
+                           FontFamily="{DynamicResource FontFamilyText}"
+                           FontSize="{DynamicResource FontSizeCaption}"
+                           Foreground="{DynamicResource TextTertiaryBrush}"/>
+                <!-- Body-strong 14px -->
+                <TextBlock x:Name="DeviceNameText" Text="Headphones"
+                           FontFamily="{DynamicResource FontFamilyText}"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           FontSize="{DynamicResource FontSizeBody}" FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
+
+                <!-- Volume progress bar (visible only for volume events) -->
+                <Border x:Name="VolumeBarTrack" Height="4" CornerRadius="2"
+                        Background="{DynamicResource StrokeStrongBrush}"
+                        Margin="0,7,0,1" Visibility="Collapsed" HorizontalAlignment="Stretch">
+                    <Border x:Name="VolumeBarFill" Height="4" CornerRadius="2"
+                            Background="{DynamicResource AccentBrush}"
+                            HorizontalAlignment="Left" Width="0"/>
+                </Border>
             </StackPanel>
         </Grid>
     </Border>

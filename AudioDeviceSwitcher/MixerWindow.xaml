@@ -41,7 +41,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border x:Name="ThumbBorder" CornerRadius="2.5" Background="#35FFFFFF" Width="5" HorizontalAlignment="Center" Margin="2,0,2,0"/>
+                        <Border x:Name="ThumbBorder" CornerRadius="2.5" Background="{DynamicResource StrokeStrongBrush}" Width="5" HorizontalAlignment="Center" Margin="2,0,2,0"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ThumbBorder" Property="Background" Value="#65FFFFFF"/>
@@ -83,7 +83,7 @@
                     <ControlTemplate TargetType="{x:Type Slider}">
                         <Grid>
                             <!-- Inactive Track -->
-                            <Border x:Name="TrackBackground" Height="4" CornerRadius="2" Background="#28FFFFFF" VerticalAlignment="Center"/>
+                            <Border x:Name="TrackBackground" Height="4" CornerRadius="2" Background="{DynamicResource StrokeStrongBrush}" VerticalAlignment="Center"/>
                             
                             <!-- Subtle 4px Audio Peak Level Meter -->
                             <ProgressBar x:Name="PeakMeter" Height="4" Minimum="0" Maximum="100" 
@@ -109,7 +109,7 @@
                                     <RepeatButton Command="{x:Static Slider.DecreaseLarge}">
                                         <RepeatButton.Template>
                                             <ControlTemplate>
-                                                <Border Height="4" CornerRadius="2" Background="#60CDFF" VerticalAlignment="Center"/>
+                                                <Border Height="4" CornerRadius="2" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -129,7 +129,15 @@
                                             <ControlTemplate>
                                                 <!-- Circular Windows 11 Thumb with Hover/Drag Micro-Interactions -->
                                                 <Grid Width="20" Height="20" Background="Transparent">
-                                                    <Border x:Name="ThumbBorder" Width="12" Height="12" CornerRadius="6" Background="#60CDFF" BorderBrush="#20FFFFFF" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <!-- Outer ring -->
+                                                    <Border Width="18" Height="18" CornerRadius="9"
+                                                            Background="{DynamicResource CardBrush}"
+                                                            BorderBrush="{DynamicResource StrokeStrongBrush}" BorderThickness="1"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <!-- Accent core dot (scales on hover / press per Fluent slider) -->
+                                                    <Border x:Name="ThumbBorder" Width="12" Height="12" CornerRadius="6"
+                                                            Background="{DynamicResource AccentBrush}"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center">
                                                         <Border.Style>
                                                             <Style TargetType="Border">
                                                                 <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
@@ -143,16 +151,14 @@
                                                                         <DataTrigger.EnterActions>
                                                                             <BeginStoryboard>
                                                                                 <Storyboard>
-                                                                                    <ColorAnimation Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#FFFFFF" Duration="0:0:0.12"/>
-                                                                                    <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)" To="1.25" Duration="0:0:0.12"/>
-                                                                                    <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)" To="1.25" Duration="0:0:0.12"/>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)" To="1.3" Duration="0:0:0.12"/>
+                                                                                    <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)" To="1.3" Duration="0:0:0.12"/>
                                                                                 </Storyboard>
                                                                             </BeginStoryboard>
                                                                         </DataTrigger.EnterActions>
                                                                         <DataTrigger.ExitActions>
                                                                             <BeginStoryboard>
                                                                                 <Storyboard>
-                                                                                    <ColorAnimation Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#60CDFF" Duration="0:0:0.18"/>
                                                                                     <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleX)" To="1" Duration="0:0:0.18"/>
                                                                                     <DoubleAnimation Storyboard.TargetProperty="(Border.RenderTransform).(ScaleTransform.ScaleY)" To="1" Duration="0:0:0.18"/>
                                                                                 </Storyboard>
@@ -160,10 +166,9 @@
                                                                         </DataTrigger.ExitActions>
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsDragging, RelativeSource={RelativeSource AncestorType=Thumb}}" Value="True">
-                                                                        <Setter Property="Background" Value="#E5E5E5"/>
                                                                         <Setter Property="RenderTransform">
                                                                             <Setter.Value>
-                                                                                <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
+                                                                                <ScaleTransform ScaleX="0.85" ScaleY="0.85"/>
                                                                             </Setter.Value>
                                                                         </Setter>
                                                                     </DataTrigger>
@@ -192,21 +197,20 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets, Segoe UI Symbol"/>
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="btnBorder" CornerRadius="5" Background="{TemplateBinding Background}">
+                        <Border x:Name="btnBorder" CornerRadius="4" Background="{TemplateBinding Background}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="btnBorder" Property="Background" Value="#25FFFFFF"/>
-                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                <Setter TargetName="btnBorder" Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="btnBorder" Property="Background" Value="#15FFFFFF"/>
-                                <Setter Property="Foreground" Value="#E0E0E0"/>
+                                <Setter TargetName="btnBorder" Property="Background" Value="{DynamicResource CardBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -215,9 +219,9 @@
         </Style>
     </Window.Resources>
 
-    <!-- Frosted Acrylic Window Frame (Refined 8px Radius & Single Crisp Edge Highlight) -->
-    <Border CornerRadius="8" Background="#05FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1">
-        <Grid Margin="16,14,16,14">
+    <!-- Acrylic window frame (8px radius; theme-aware solid backing over the glass) -->
+    <Border CornerRadius="{DynamicResource OverlayCornerRadius}" Background="{DynamicResource FlyoutFillBrush}" BorderBrush="{DynamicResource StrokeStrongBrush}" BorderThickness="1">
+        <Grid Margin="16,16,16,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -225,8 +229,8 @@
 
             <!-- Header -->
             <Grid Grid.Row="0" Margin="0,0,0,12">
-                <TextBlock Text="Volume mixer" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="15" FontWeight="SemiBold" Foreground="#F5F5F5" VerticalAlignment="Center"/>
-                
+                <TextBlock Text="Volume mixer" FontFamily="{DynamicResource FontFamilyDisplay}" FontSize="{DynamicResource FontSizeSubtitle}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="SettingsButton" Content="&#xE713;" Style="{StaticResource HeaderActionButtonStyle}" ToolTip="Settings" Click="SettingsButton_Click" Margin="0,0,2,0"/>
                     <Button x:Name="CloseButton" Content="&#xE8BB;" Style="{StaticResource HeaderActionButtonStyle}" ToolTip="Close" Click="CloseButton_Click"/>
@@ -238,13 +242,16 @@
                 <StackPanel>
                     <!-- Device Cards Container -->
                     <StackPanel x:Name="DeviceCardsContainer"/>
-                    
+
                     <!-- Apps Header & Separator -->
-                    <Border x:Name="AppsSeparator" Height="1" Background="#18FFFFFF" Margin="0,10,0,14" Visibility="Collapsed"/>
-                    <TextBlock x:Name="AppsHeader" Text="Apps" FontFamily="Segoe UI Variable Display, Segoe UI" FontSize="13" FontWeight="SemiBold" Foreground="#A8A8A8" Margin="4,0,0,10" Visibility="Collapsed"/>
-                    
+                    <Border x:Name="AppsSeparator" Height="1" Background="{DynamicResource StrokeBrush}" Margin="0,10,0,14" Visibility="Collapsed"/>
+                    <TextBlock x:Name="AppsHeader" Text="Apps" FontFamily="{DynamicResource FontFamilyDisplay}" FontSize="{DynamicResource FontSizeCaption}" FontWeight="SemiBold" Foreground="{DynamicResource TextTertiaryBrush}" Margin="4,0,0,10" Visibility="Collapsed"/>
+
                     <!-- App Cards Container -->
                     <StackPanel x:Name="AppSessionsContainer"/>
+
+                    <!-- Empty state -->
+                    <TextBlock x:Name="EmptyState" Text="No audio devices available" FontFamily="{DynamicResource FontFamilyText}" FontSize="{DynamicResource FontSizeBody}" Foreground="{DynamicResource TextTertiaryBrush}" HorizontalAlignment="Center" Margin="0,24,0,8" Visibility="Collapsed"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

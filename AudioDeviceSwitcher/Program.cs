@@ -33,6 +33,18 @@ namespace AudioDeviceSwitcher
                 };
             }
 
+            // Build the Fluent design tokens (accent, light/dark, type ramp, radii)
+            // before any window is shown so all surfaces share one coherent theme.
+            try
+            {
+                var startupSettings = AppSettings.Load();
+                ThemeManager.Initialize(startupSettings.Theme);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Program] Theme init failed: {ex.Message}");
+            }
+
             Application.Run(new TrayApplicationContext());
         }
     }

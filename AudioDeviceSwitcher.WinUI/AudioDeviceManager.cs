@@ -160,13 +160,12 @@ namespace AudioDeviceSwitcher
         {
             if (selectedDeviceIds == null || selectedDeviceIds.Count < 2)
             {
-                return; // Need at least 2 devices to switch between
+                return;
             }
 
             var activeDevices = GetActivePlaybackDevices();
             var currentDefaultId = GetDefaultPlaybackDevice()?.Id;
 
-            // Filter active devices to only those in the user's selected list
             var switchableDevices = activeDevices
                 .Where(d => selectedDeviceIds.Contains(d.Id))
                 .ToList();

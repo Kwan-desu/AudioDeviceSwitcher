@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="AudioDeviceSwitcher.OsdWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="OSD">
+
+    <Grid x:Name="RootGrid" Background="Transparent" Opacity="1">
+        <!-- Rounded HUD Container: 8px corner radius, NO border, perfectly flush to window edges -->
+        <Border x:Name="ContainerBorder"
+                CornerRadius="8"
+                BorderThickness="0"
+                Background="{ThemeResource AcrylicFlyoutFillColorBrush}">
+            <Grid Padding="14,8,14,8" VerticalAlignment="Center">
+                <!-- Volume Adjustment Mode -->
+                <Grid x:Name="VolumeModeGrid" Visibility="Visible">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Clean Fluent volume glyph -->
+                        <FontIcon x:Name="VolumeGlyphIcon" Glyph="&#xE995;" FontSize="15"
+                                  Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                  VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                        <TextBlock x:Name="VolumeDeviceNameText" Text="Headphones"
+                                   Grid.Column="1"
+                                   FontSize="12.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1"
+                                   VerticalAlignment="Center" />
+
+                        <TextBlock x:Name="VolumePercentText" Text="50%"
+                                   Grid.Column="2"
+                                   FontSize="12.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+
+                    <ProgressBar x:Name="VolumeProgressBar" Grid.Row="1" Height="3" CornerRadius="1.5"
+                                 Minimum="0" Maximum="100" Value="50"
+                                 Foreground="{ThemeResource SystemAccentColorBrush}"
+                                 Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}" />
+                </Grid>
+
+                <!-- Device Switched / Status Notification Mode -->
+                <Grid x:Name="SwitchModeGrid" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <FontIcon x:Name="SwitchGlyphIcon" Glyph="&#xE7F6;" FontSize="18"
+                              Foreground="{ThemeResource SystemAccentColorBrush}"
+                              VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                        <TextBlock x:Name="SwitchTitleText" Text="Audio playback switched"
+                                   FontSize="10.5"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock x:Name="SwitchDeviceNameText" Text="Headphones"
+                                   FontSize="12.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

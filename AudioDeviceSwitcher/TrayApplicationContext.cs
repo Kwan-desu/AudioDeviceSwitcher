@@ -24,10 +24,19 @@ namespace AudioDeviceSwitcher
             _audioManager = new AudioDeviceManager();
             _settings = AppSettings.Load();
 
+            _audioManager.DevicesChanged += () =>
+            {
+                try
+                {
+                    _trayIcon?.ContextMenuStrip?.BeginInvoke(new Action(() => UpdateTrayText()));
+                }
+                catch { }
+            };
+
             _hotkeyManager = new GlobalHotkeyManager();
             _hotkeyManager.QuickSwitchPressed += () => QuickSwitch();
             _hotkeyManager.OpenMixerPressed += () => ShowMixer();
-            _hotkeyManager.RegisterHotkeys(_settings.EnableGlobalHotkeys);
+            _hotkeyManager.RegisterHotkeys(_settings.EnableGlobalHotkeys, _settings.QuickSwitchHotkey, _settings.OpenMixerHotkey);
 
             _trayIcon = new NotifyIcon()
             {
@@ -43,11 +52,21 @@ namespace AudioDeviceSwitcher
             _trayScrollManager.Scrolled += TrayScrollManager_Scrolled;
             _trayScrollManager.SetEnabled(_settings.EnableTrayScrollVolume);
 
-            _trayIcon.ContextMenuStrip.Items.Add("🎚️ Volume Mixer", null, (s, e) => ShowMixer());
-            _trayIcon.ContextMenuStrip.Items.Add("🔄 Quick Switch Device", null, (s, e) => QuickSwitch());
-            _trayIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
-            _trayIcon.ContextMenuStrip.Items.Add("⚙️ Settings", null, Settings_Click);
-            _trayIcon.ContextMenuStrip.Items.Add("❌ Exit", null, Exit_Click);
+            var menu = _trayIcon.ContextMenuStrip;
+            menu.Renderer = new FluentMenuRenderer();
+            menu.Font = new Font("Segoe UI Variable Text", 9.5f);
+            menu.ImageScalingSize = new Size(16, 16);
+            menu.ShowImageMargin = true;
+            menu.Padding = new Padding(4);
+            // Round the menu window + apply dark mode each time it opens (Win11).
+            menu.HandleCreated += (s, e) => StyleMenuWindow(menu.Handle);
+            menu.Opened += (s, e) => StyleMenuWindow(menu.Handle);
+
+            menu.Items.Add(MakeMenuItem("Volume mixer", "\uE9E9", (s, e) => ShowMixer()));
+            menu.Items.Add(MakeMenuItem("Quick switch device", "\uE895", (s, e) => QuickSwitch()));
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add(MakeMenuItem("Settings", "\uE713", Settings_Click));
+            menu.Items.Add(MakeMenuItem("Exit", "\uE711", Exit_Click));
 
             UpdateTrayText();
 
@@ -56,8 +75,34 @@ namespace AudioDeviceSwitcher
             _pollTimer.Start();
         }
 
-        private void TrayScrollManager_Scrolled(int direction)
+        private ToolStripMenuItem MakeMenuItem(string text, string glyph, EventHandler onClick)
         {
+            var item = new ToolStripMenuItem(text, RenderGlyph(glyph), onClick)
+            {
+                Padding = new Padding(4, 3, 4, 3)
+            };
+            return item;
+        }
+
+        private Image RenderGlyph(string glyph)
+        {
+            var bmp = new Bitmap(16, 16);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
+                g.Clear(Color.Transparent);
+                var a = ThemeManager.Accent;
+                var accentGdi = Color.FromArgb(a.R, a.G, a.B);
+                using var font = new Font("Segoe Fluent Icons", 11f, FontStyle.Regular, GraphicsUnit.Pixel);
+                using var brush = new SolidBrush(accentGdi);
+                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString(glyph, font, brush, new RectangleF(0, 0, 16, 16), sf);
+            }
+            return bmp;
+        }
+
+        private void TrayScrollManager_Scrolled(int direction)        {
             var currentDefault = _audioManager.GetDefaultPlaybackDevice();
             if (currentDefault != null)
             {
@@ -89,7 +134,7 @@ namespace AudioDeviceSwitcher
                     _currentOsd.Closed += (s, e) => _currentOsd = null;
                 }
 
-                _currentOsd.ShowOsd("VOLUME ADJUSTED", status, glyph);
+                _currentOsd.ShowOsd("Volume adjusted", status, glyph, isMuted ? 0 : volume);
             }
             catch { }
         }
@@ -104,7 +149,7 @@ namespace AudioDeviceSwitcher
                     _currentOsd.Closed += (s, e) => _currentOsd = null;
                 }
 
-                _currentOsd.ShowOsd("AUDIO PLAYBACK SWITCHED", deviceName, "\uE995");
+                _currentOsd.ShowOsd("Audio playback switched", deviceName, "\uE995");
             }
             catch { }
         }
@@ -156,21 +201,44 @@ namespace AudioDeviceSwitcher
 
         private void QuickSwitch()
         {
-            if (_settings.SelectedDeviceIds.Count < 2)
-            {
-                _trayIcon.ShowBalloonTip(3000, "Setup Required", "Please open Settings to select at least 2 devices for quick switching.", ToolTipIcon.Info);
-                return;
-            }
-
-            _audioManager.SwitchToNextDevice(_settings.SelectedDeviceIds);
+            var result = _audioManager.SwitchToNextDevice(_settings);
             UpdateTrayText();
 
-            // Show OSD Notification
-            var currentDevice = _audioManager.GetDefaultPlaybackDevice();
-            if (currentDevice != null)
+            switch (result.Status)
             {
-                ShowDeviceSwitchOsd(currentDevice.FullName);
+                case SwitchStatus.Success:
+                    if (result.SwitchedToDevice != null)
+                    {
+                        ShowDeviceSwitchOsd(result.SwitchedToDevice.FullName);
+                    }
+                    break;
+
+                case SwitchStatus.TargetDeviceDisconnected:
+                    ShowDisconnectedOsd(result.DisconnectedDeviceName ?? "Other audio device");
+                    break;
+
+                case SwitchStatus.NeedMoreDevicesConfigured:
+                    _trayIcon.ShowBalloonTip(3000, "Setup Required", "Please open Settings to select at least 2 devices for quick switching.", ToolTipIcon.Info);
+                    break;
+
+                case SwitchStatus.Failed:
+                    break;
             }
+        }
+
+        private void ShowDisconnectedOsd(string deviceName)
+        {
+            try
+            {
+                if (_currentOsd == null || !_currentOsd.IsLoaded)
+                {
+                    _currentOsd = new OsdWindow();
+                    _currentOsd.Closed += (s, e) => _currentOsd = null;
+                }
+
+                _currentOsd.ShowOsd("Device is disconnected", deviceName, "\uE7BA");
+            }
+            catch { }
         }
 
         public void ShowMixer()
@@ -189,6 +257,9 @@ namespace AudioDeviceSwitcher
 
         public void UpdateTrayText()
         {
+            var activeDevices = _audioManager.GetActivePlaybackDevices();
+            _settings.SyncActiveDevices(activeDevices);
+
             var currentDefault = _audioManager.GetDefaultPlaybackDevice();
             string fullName = currentDefault?.FullName ?? "Unknown";
 
@@ -201,11 +272,11 @@ namespace AudioDeviceSwitcher
                 int index = _settings.SelectedDeviceIds.IndexOf(currentDefault.Id);
                 if (index >= 0)
                 {
-                    label = _settings.GetLabelForDevice(currentDefault.Id, index);
+                    label = _settings.GetLabelForDevice(currentDefault.Id, currentDefault.FullName, index);
                 }
                 else
                 {
-                    label = "AUX ?";
+                    label = _settings.GetLabelForDevice(currentDefault.Id, currentDefault.FullName, 0);
                 }
 
                 volume = Math.Clamp((int)currentDefault.Volume, 0, 100);
@@ -232,6 +303,22 @@ namespace AudioDeviceSwitcher
 
         [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
         extern static bool DestroyIcon(IntPtr handle);
+
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int val, int size);
+
+        private void StyleMenuWindow(IntPtr hwnd)
+        {
+            try
+            {
+                if (hwnd == IntPtr.Zero) return;
+                int dark = ThemeManager.IsDark ? 1 : 0;
+                DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));   // immersive dark mode
+                int round = 2;                                            // DWMWCP_ROUND
+                DwmSetWindowAttribute(hwnd, 33, ref round, sizeof(int));  // corner preference
+            }
+            catch { }
+        }
 
         private Icon GenerateGiantTaskbarIcon(string label, int volume, bool isMuted)
         {
@@ -357,7 +444,7 @@ namespace AudioDeviceSwitcher
             settingsWindow.ShowDialog();
             
             // Re-apply settings
-            _hotkeyManager?.RegisterHotkeys(_settings.EnableGlobalHotkeys);
+            _hotkeyManager?.RegisterHotkeys(_settings.EnableGlobalHotkeys, _settings.QuickSwitchHotkey, _settings.OpenMixerHotkey);
             _trayScrollManager?.SetEnabled(_settings.EnableTrayScrollVolume);
             
             UpdateTrayText();
@@ -374,6 +461,7 @@ namespace AudioDeviceSwitcher
             _trayScrollManager?.Dispose();
             _trayIcon.Visible = false;
             _hotkeyManager?.Dispose();
+            _audioManager?.Dispose();
             System.Windows.Application.Current?.Shutdown();
             Application.Exit();
         }
