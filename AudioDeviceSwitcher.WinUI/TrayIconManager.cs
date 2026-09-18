@@ -283,7 +283,7 @@ namespace AudioDeviceSwitcher
                     try
                     {
                         var s = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                        bool isOver = _isCursorOverIcon || IsCursorOverTrayIcon() || IsPointNearTray(s.ptX, s.ptY);
+                        bool isOver = _isCursorOverIcon || IsPointNearTray(s.ptX, s.ptY);
                         if (isOver)
                         {
                             short delta = (short)((s.mouseData >> 16) & 0xFFFF);
@@ -294,18 +294,6 @@ namespace AudioDeviceSwitcher
                                 VolumeScrolled?.Invoke(dir);
                                 return (IntPtr)1; // Consume event so behind windows don't scroll
                             }
-                        }
-                    }
-                    catch { }
-                }
-                else if (msg == WM_MOUSEMOVE && _isCursorOverIcon)
-                {
-                    try
-                    {
-                        var s = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                        if (!IsPointNearTray(s.ptX, s.ptY))
-                        {
-                            _isCursorOverIcon = false;
                         }
                     }
                     catch { }

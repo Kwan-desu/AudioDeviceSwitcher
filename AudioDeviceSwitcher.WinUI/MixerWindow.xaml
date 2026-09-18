@@ -156,10 +156,9 @@
 
                                 <Slider x:Name="MasterVolumeSlider"
                                         Grid.Column="1"
-                                        Minimum="0" Maximum="100" Value="50"
+                                        Minimum="0" Maximum="100"
                                         Height="32"
-                                        VerticalAlignment="Center"
-                                        ValueChanged="MasterVolumeSlider_ValueChanged" />
+                                        VerticalAlignment="Center" />
 
                                 <TextBlock x:Name="MasterVolumePercentText"
                                            Grid.Column="2"

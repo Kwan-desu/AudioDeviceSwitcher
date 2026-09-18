@@ -246,15 +246,22 @@ namespace AudioDeviceSwitcher
                 return;
             }
 
-            CurrentMixerWindow = new MixerWindow();
-            CurrentMixerWindow.Closed += (s, e) => CurrentMixerWindow = null;
-            CurrentMixerWindow.Activate();
             try
             {
-                var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(CurrentMixerWindow);
-                SetForegroundWindow(hWnd);
+                CurrentMixerWindow = new MixerWindow();
+                CurrentMixerWindow.Closed += (s, e) => CurrentMixerWindow = null;
+                CurrentMixerWindow.Activate();
+                try
+                {
+                    var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(CurrentMixerWindow);
+                    SetForegroundWindow(hWnd);
+                }
+                catch { }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log($"[App] ShowMixerWindow error: {ex}");
+            }
         }
 
         public void ShowOsd(string title, string deviceName, string glyph, int? volume = null)

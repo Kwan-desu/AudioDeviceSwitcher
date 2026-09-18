@@ -53,20 +53,16 @@ namespace AudioDeviceSwitcher
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+        private delegate IntPtr SUBCLASSPROC(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData);
 
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+        [DllImport("comctl32.dll", SetLastError = true)]
+        private static extern bool SetWindowSubclass(IntPtr hWnd, SUBCLASSPROC pfnSubclass, UIntPtr uIdSubclass, UIntPtr dwRefData);
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("comctl32.dll", SetLastError = true)]
+        private static extern bool RemoveWindowSubclass(IntPtr hWnd, SUBCLASSPROC pfnSubclass, UIntPtr uIdSubclass);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern IntPtr GetModuleHandle(string? lpModuleName);
-
-        private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+        [DllImport("comctl32.dll")]
+        private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
 
         private const int GWL_STYLE = -16;
         private const int WS_BORDER = 0x00800000;
@@ -80,12 +76,8 @@ namespace AudioDeviceSwitcher
         private const uint SWP_NOACTIVATE = 0x0010;
         private const uint SWP_FRAMECHANGED = 0x0020;
 
-        private const int WH_MOUSE_LL = 14;
-        private const int WM_LBUTTONDOWN = 0x0201;
-        private const int WM_RBUTTONDOWN = 0x0204;
-        private const int WM_MBUTTONDOWN = 0x0207;
-        private const int WM_NCLBUTTONDOWN = 0x00A1;
-        private const int WM_NCRBUTTONDOWN = 0x00A4;
+        private const int WM_ACTIVATE = 0x0006;
+        private const int WA_INACTIVE = 0;
 
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
@@ -98,15 +90,6 @@ namespace AudioDeviceSwitcher
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT { public int Left, Top, Right, Bottom; }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct MSLLHOOKSTRUCT
-        {
-            public int ptX, ptY;
-            public uint mouseData;
-            public uint flags, time;
-            public IntPtr dwExtraInfo;
-        }
-
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
         private struct MONITORINFO
         {
@@ -116,26 +99,39 @@ namespace AudioDeviceSwitcher
             public uint dwFlags;
         }
 
-        private IntPtr _mouseHookId = IntPtr.Zero;
-        private LowLevelMouseProc? _mouseHookProc;
+        private SUBCLASSPROC? _subclassProc;
         private bool _isFlyoutOpen = false;
 
         public MixerWindow()
         {
-            InitializeComponent();
-
             _audioManager = App.CurrentApp.AudioManager;
             _settings = App.CurrentApp.Settings;
+            _isUpdatingUi = true;
+
+            InitializeComponent();
 
             ConfigureWindow();
             ApplyAcrylicBackdrop();
 
             ReloadDevices();
 
+            MasterVolumeSlider.ValueChanged += MasterVolumeSlider_ValueChanged;
             DeviceSwitcherFlyout.Opened += (s, e) => _isFlyoutOpen = true;
             DeviceSwitcherFlyout.Closed += (s, e) => _isFlyoutOpen = false;
 
-            Closed += (s, e) => RemoveDismissHook();
+            Activated += MixerWindow_Activated;
+            Closed += (s, e) => CleanupSubclass();
+        }
+
+        private void MixerWindow_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                if (!_isFlyoutOpen)
+                {
+                    DispatcherQueue.TryEnqueue(() => Close());
+                }
+            }
         }
 
         private void ConfigureWindow()
@@ -211,70 +207,41 @@ namespace AudioDeviceSwitcher
                 App.Log($"[MixerWindow] Configure DWM failed: {ex.Message}");
             }
 
-            InstallDismissHook(hWnd);
-        }
-
-        private void InstallDismissHook(IntPtr hWnd)
-        {
-            if (_mouseHookId != IntPtr.Zero) return;
             try
             {
-                _mouseHookProc = (nCode, wParam, lParam) =>
-                {
-                    if (nCode >= 0)
-                    {
-                        int msg = (int)wParam;
-                        if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN ||
-                            msg == WM_NCLBUTTONDOWN || msg == WM_NCRBUTTONDOWN)
-                        {
-                            if (_isFlyoutOpen)
-                            {
-                                return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
-                            }
-
-                            try
-                            {
-                                var s = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                                if (GetWindowRect(hWnd, out RECT rect))
-                                {
-                                    bool isInside = s.ptX >= rect.Left && s.ptX <= rect.Right &&
-                                                    s.ptY >= rect.Top && s.ptY <= rect.Bottom;
-                                    if (!isInside)
-                                    {
-                                        App.Log("[MixerWindow] Click outside detected -> Closing mixer");
-                                        DispatcherQueue.TryEnqueue(() => Close());
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-                    return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
-                };
-
-                using var curProcess = Process.GetCurrentProcess();
-                using var curModule = curProcess.MainModule;
-                IntPtr hMod = curModule != null ? GetModuleHandle(curModule.ModuleName) : IntPtr.Zero;
-                _mouseHookId = SetWindowsHookEx(WH_MOUSE_LL, _mouseHookProc, hMod, 0);
+                _subclassProc = MixerSubclassProc;
+                SetWindowSubclass(hWnd, _subclassProc, new UIntPtr(2001), UIntPtr.Zero);
             }
             catch (Exception ex)
             {
-                App.Log($"[MixerWindow] InstallDismissHook error: {ex.Message}");
+                App.Log($"[MixerWindow] SetWindowSubclass failed: {ex.Message}");
             }
         }
 
-        private void RemoveDismissHook()
+        private IntPtr MixerSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData)
         {
-            if (_mouseHookId != IntPtr.Zero)
+            if (uMsg == WM_ACTIVATE)
             {
-                try
+                int wa = (int)(wParam.ToInt64() & 0xFFFF);
+                if (wa == WA_INACTIVE && !_isFlyoutOpen)
                 {
-                    UnhookWindowsHookEx(_mouseHookId);
+                    DispatcherQueue.TryEnqueue(() => Close());
                 }
-                catch { }
-                _mouseHookId = IntPtr.Zero;
-                _mouseHookProc = null;
             }
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+
+        private void CleanupSubclass()
+        {
+            try
+            {
+                var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                if (_subclassProc != null && hWnd != IntPtr.Zero)
+                {
+                    RemoveWindowSubclass(hWnd, _subclassProc, new UIntPtr(2001));
+                }
+            }
+            catch { }
         }
 
         private void PositionNearTray(AppWindow appWindow, IntPtr hWnd, int? desiredHeightDips = null)
@@ -546,7 +513,7 @@ namespace AudioDeviceSwitcher
                 }
 
                 var sessions = sessionController.All()
-                    .Where(s => !s.IsSystemSession && s.Volume > 0 || !string.IsNullOrWhiteSpace(s.DisplayName))
+                    .Where(s => !s.IsSystemSession && (s.Volume > 0 || !string.IsNullOrWhiteSpace(s.DisplayName)))
                     .OrderBy(s => s.DisplayName)
                     .ToList();
 
@@ -560,12 +527,19 @@ namespace AudioDeviceSwitcher
 
                 foreach (var session in sessions)
                 {
-                    string displayName = !string.IsNullOrWhiteSpace(session.DisplayName)
-                        ? session.DisplayName
-                        : (!string.IsNullOrWhiteSpace(session.ExecutablePath) ? System.IO.Path.GetFileNameWithoutExtension(session.ExecutablePath) : "Application");
+                    try
+                    {
+                        string displayName = !string.IsNullOrWhiteSpace(session.DisplayName)
+                            ? session.DisplayName
+                            : (!string.IsNullOrWhiteSpace(session.ExecutablePath) ? System.IO.Path.GetFileNameWithoutExtension(session.ExecutablePath) : "Application");
 
-                    var row = CreateAppRow(session, displayName);
-                    AppSessionsContainer.Children.Add(row);
+                        var row = CreateAppRow(session, displayName);
+                        AppSessionsContainer.Children.Add(row);
+                    }
+                    catch (Exception ex)
+                    {
+                        App.Log($"[MixerWindow] Error adding app session: {ex.Message}");
+                    }
                 }
             }
             catch
@@ -678,17 +652,11 @@ namespace AudioDeviceSwitcher
                 if (sysIcon == null) return null;
 
                 using var bitmap = sysIcon.ToBitmap();
-                using var ms = new MemoryStream();
+                var ms = new MemoryStream();
                 bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
                 ms.Position = 0;
 
-                var ras = new InMemoryRandomAccessStream();
-                using (var writer = new DataWriter(ras.GetOutputStreamAt(0)))
-                {
-                    writer.WriteBytes(ms.ToArray());
-                    writer.StoreAsync().AsTask().GetAwaiter().GetResult();
-                }
-
+                var ras = ms.AsRandomAccessStream();
                 var bitmapImage = new BitmapImage();
                 bitmapImage.SetSource(ras);
                 _iconCache[exePath] = bitmapImage;
