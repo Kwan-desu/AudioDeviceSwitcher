@@ -118,12 +118,31 @@
                             <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                                 <TextBlock Text="Launch on Windows startup" Style="{StaticResource BodyStrongTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                <TextBlock Text="Automatically start Audio Device Switcher when you sign in."
+                                <TextBlock Text="Automatically start Audio Device Switcher when you sign in (boots minimized in tray)."
                                            Style="{StaticResource CaptionTextBlockStyle}"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                             </StackPanel>
                             <ToggleSwitch x:Name="StartupToggle" Grid.Column="1" OnContent="" OffContent=""
                                           Toggled="StartupToggle_Toggled" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Start Minimized to Tray Card -->
+                    <Border Style="{StaticResource FluentCardStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="Start minimized to system tray" Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                <TextBlock Text="Start the application directly in the notification area without showing this window."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <ToggleSwitch x:Name="StartMinimizedToggle" Grid.Column="1" OnContent="" OffContent=""
+                                          Toggled="StartMinimizedToggle_Toggled" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
 
@@ -200,6 +219,56 @@
                             </StackPanel>
                             <ToggleSwitch x:Name="TrayScrollToggle" Grid.Column="1" OnContent="" OffContent=""
                                           Toggled="TrayScrollToggle_Toggled" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Scroll Volume Step Size Card -->
+                    <Border Style="{StaticResource FluentCardStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="Scroll volume step size" Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                <TextBlock Text="Volume percentage adjusted per mouse wheel tick on the tray icon."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <ComboBox x:Name="ScrollStepCombo" Grid.Column="1" Width="180" VerticalAlignment="Center"
+                                      SelectionChanged="ScrollStepCombo_SelectionChanged">
+                                <ComboBoxItem Content="1% (Fine)" Tag="1" />
+                                <ComboBoxItem Content="2% (Default)" Tag="2" />
+                                <ComboBoxItem Content="5%" Tag="5" />
+                                <ComboBoxItem Content="10% (Fast)" Tag="10" />
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+
+                    <!-- Volume Overlay Display Duration Card -->
+                    <Border Style="{StaticResource FluentCardStyle}">
+                        <Grid ColumnSpacing="16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="Volume overlay display duration" Style="{StaticResource BodyStrongTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                                <TextBlock Text="How long the on-screen volume bar popup stays visible before fading out."
+                                           Style="{StaticResource CaptionTextBlockStyle}"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                            <ComboBox x:Name="OsdDurationCombo" Grid.Column="1" Width="180" VerticalAlignment="Center"
+                                      SelectionChanged="OsdDurationCombo_SelectionChanged">
+                                <ComboBoxItem Content="0.5 seconds (Quick)" Tag="500" />
+                                <ComboBoxItem Content="0.8 seconds" Tag="800" />
+                                <ComboBoxItem Content="1.0 second" Tag="1000" />
+                                <ComboBoxItem Content="1.5 seconds (Default)" Tag="1500" />
+                                <ComboBoxItem Content="2.0 seconds" Tag="2000" />
+                                <ComboBoxItem Content="3.0 seconds (Long)" Tag="3000" />
+                            </ComboBox>
                         </Grid>
                     </Border>
 

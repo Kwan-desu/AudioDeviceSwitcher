@@ -23,7 +23,7 @@ namespace AudioDeviceSwitcher
                         string exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? "";
                         if (!string.IsNullOrEmpty(exePath))
                         {
-                            key.SetValue(AppName, $"\"{exePath}\"");
+                            key.SetValue(AppName, $"\"{exePath}\" --startup");
                         }
                     }
                     else

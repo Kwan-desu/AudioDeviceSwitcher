@@ -182,8 +182,6 @@ namespace AudioDeviceSwitcher
         private IntPtr _currentHIcon = IntPtr.Zero;
         private IntPtr _mouseHookId = IntPtr.Zero;
         private bool _isDisposed;
-        private volatile bool _isCursorOverIcon = false;
-        private System.Threading.Timer? _hoverClearTimer;
         private POINT _lastHoverPoint = new POINT();
         private RECT _lastKnownTrayRect = new RECT();
         private bool _hasKnownTrayRect = false;
@@ -244,7 +242,7 @@ namespace AudioDeviceSwitcher
             bool verOk = Shell_NotifyIconW(NIM_SETVERSION, ref _nid);
             App.Log($"[TrayIconManager] NIM_SETVERSION result: {verOk}");
 
-            _hoverClearTimer = new System.Threading.Timer(_ => _isCursorOverIcon = false, null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+            UpdateTrayRect();
             UpdateHookState();
         }
 
@@ -269,7 +267,6 @@ namespace AudioDeviceSwitcher
             {
                 UnhookWindowsHookEx(_mouseHookId);
                 _mouseHookId = IntPtr.Zero;
-                _isCursorOverIcon = false;
             }
         }
 
@@ -283,7 +280,7 @@ namespace AudioDeviceSwitcher
                     try
                     {
                         var s = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                        bool isOver = _isCursorOverIcon || IsPointNearTray(s.ptX, s.ptY);
+                        bool isOver = IsPointOverTrayIcon(s.ptX, s.ptY);
                         if (isOver)
                         {
                             short delta = (short)((s.mouseData >> 16) & 0xFFFF);
@@ -302,20 +299,17 @@ namespace AudioDeviceSwitcher
             return CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
         }
 
-        private bool IsPointNearTray(int x, int y)
+        private bool IsPointOverTrayIcon(int x, int y)
         {
-            if (_hasKnownTrayRect)
+            if (!_hasKnownTrayRect)
             {
-                if (x >= _lastKnownTrayRect.Left - 6 && x <= _lastKnownTrayRect.Right + 6 &&
-                    y >= _lastKnownTrayRect.Top - 6 && y <= _lastKnownTrayRect.Bottom + 6)
-                {
-                    return true;
-                }
+                UpdateTrayRect();
             }
 
-            if (_lastHoverPoint.X != 0 || _lastHoverPoint.Y != 0)
+            if (_hasKnownTrayRect)
             {
-                if (Math.Abs(x - _lastHoverPoint.X) <= 36 && Math.Abs(y - _lastHoverPoint.Y) <= 36)
+                if (x >= (_lastKnownTrayRect.Left - 2) && x <= (_lastKnownTrayRect.Right + 2) &&
+                    y >= (_lastKnownTrayRect.Top - 2) && y <= (_lastKnownTrayRect.Bottom + 2))
                 {
                     return true;
                 }
@@ -367,13 +361,11 @@ namespace AudioDeviceSwitcher
 
                 if (eventMsg == WM_MOUSEMOVE)
                 {
-                    _isCursorOverIcon = true;
                     if (GetCursorPos(out POINT pt))
                     {
                         _lastHoverPoint = pt;
                     }
                     UpdateTrayRect();
-                    _hoverClearTimer?.Change(5000, System.Threading.Timeout.Infinite);
                 }
 
                 switch (eventMsg)
@@ -694,7 +686,6 @@ namespace AudioDeviceSwitcher
                 UnhookWindowsHookEx(_mouseHookId);
                 _mouseHookId = IntPtr.Zero;
             }
-            _hoverClearTimer?.Dispose();
 
             _singleClickTimer?.Dispose();
             Shell_NotifyIconW(NIM_DELETE, ref _nid);

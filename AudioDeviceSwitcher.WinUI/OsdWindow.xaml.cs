@@ -95,7 +95,10 @@ namespace AudioDeviceSwitcher
 
             Closed += (s, e) => IsClosed = true;
 
-            _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1800) };
+            int duration = App.CurrentApp?.Settings?.OsdDurationMs ?? 1500;
+            if (duration < 300) duration = 300;
+            if (duration > 10000) duration = 10000;
+            _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(duration) };
             _hideTimer.Tick += (s, e) =>
             {
                 _hideTimer.Stop();
@@ -355,8 +358,15 @@ namespace AudioDeviceSwitcher
                 SetWindowPos(_hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);
             }
 
-            _hideTimer?.Stop();
-            _hideTimer?.Start();
+            if (_hideTimer != null)
+            {
+                int duration = App.CurrentApp?.Settings?.OsdDurationMs ?? 1500;
+                if (duration < 300) duration = 300;
+                if (duration > 10000) duration = 10000;
+                _hideTimer.Interval = TimeSpan.FromMilliseconds(duration);
+                _hideTimer.Stop();
+                _hideTimer.Start();
+            }
         }
     }
 }

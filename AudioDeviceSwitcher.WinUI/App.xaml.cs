@@ -115,8 +115,17 @@ namespace AudioDeviceSwitcher
                     _dispatcherQueue.TryEnqueue(UpdateTrayState);
                 }, null, 1000, 1000);
 
+                if (Settings.RunAtStartup)
+                {
+                    StartupManager.UpdateStartup(true);
+                }
+
                 string[] cmdArgs = Environment.GetCommandLineArgs();
-                bool startMinimized = cmdArgs.Any(a => a.Equals("--startup", StringComparison.OrdinalIgnoreCase) || a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
+                bool startMinimized = cmdArgs.Any(a => a.Equals("--startup", StringComparison.OrdinalIgnoreCase) ||
+                                                       a.Equals("--minimized", StringComparison.OrdinalIgnoreCase) ||
+                                                       a.Equals("/startup", StringComparison.OrdinalIgnoreCase) ||
+                                                       a.Equals("/minimized", StringComparison.OrdinalIgnoreCase)) ||
+                                      Settings.StartMinimized;
 
                 var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
                 var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
@@ -206,7 +215,8 @@ namespace AudioDeviceSwitcher
             if (currentDefault != null)
             {
                 double currentVol = currentDefault.Volume;
-                double newVol = Math.Clamp(currentVol + (direction * 2), 0, 100);
+                int step = Settings.ScrollVolumeStep > 0 ? Settings.ScrollVolumeStep : 2;
+                double newVol = Math.Clamp(currentVol + (direction * step), 0, 100);
 
                 if (direction > 0 && currentDefault.IsMuted)
                 {

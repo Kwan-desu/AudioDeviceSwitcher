@@ -183,8 +183,31 @@ namespace AudioDeviceSwitcher
         private void LoadSettingsUi()
         {
             StartupToggle.IsOn = _settings.RunAtStartup;
+            StartMinimizedToggle.IsOn = _settings.StartMinimized;
             HotkeysToggle.IsOn = _settings.EnableGlobalHotkeys;
             TrayScrollToggle.IsOn = _settings.EnableTrayScrollVolume;
+
+            // Scroll Step Combo
+            foreach (var item in ScrollStepCombo.Items)
+            {
+                if (item is ComboBoxItem cbi && int.TryParse(cbi.Tag?.ToString(), out int val) && val == _settings.ScrollVolumeStep)
+                {
+                    ScrollStepCombo.SelectedItem = cbi;
+                    break;
+                }
+            }
+            if (ScrollStepCombo.SelectedItem == null) ScrollStepCombo.SelectedIndex = 1; // Default 2%
+
+            // OSD Duration Combo
+            foreach (var item in OsdDurationCombo.Items)
+            {
+                if (item is ComboBoxItem cbi && int.TryParse(cbi.Tag?.ToString(), out int val) && val == _settings.OsdDurationMs)
+                {
+                    OsdDurationCombo.SelectedItem = cbi;
+                    break;
+                }
+            }
+            if (OsdDurationCombo.SelectedItem == null) OsdDurationCombo.SelectedIndex = 3; // Default 1500ms
 
             QuickSwitchHotkeyButton.Content = _settings.QuickSwitchHotkey;
             OpenMixerHotkeyButton.Content = _settings.OpenMixerHotkey;
@@ -565,6 +588,13 @@ namespace AudioDeviceSwitcher
             StartupManager.UpdateStartup(_settings.RunAtStartup);
         }
 
+        private void StartMinimizedToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isInitializing) return;
+            _settings.StartMinimized = StartMinimizedToggle.IsOn;
+            _settings.Save();
+        }
+
         private void HotkeysToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (_isInitializing) return;
@@ -579,6 +609,26 @@ namespace AudioDeviceSwitcher
             _settings.EnableTrayScrollVolume = TrayScrollToggle.IsOn;
             _settings.Save();
             App.CurrentApp.TrayManager.EnableScrollVolume = _settings.EnableTrayScrollVolume;
+        }
+
+        private void ScrollStepCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing) return;
+            if (ScrollStepCombo.SelectedItem is ComboBoxItem cbi && int.TryParse(cbi.Tag?.ToString(), out int val))
+            {
+                _settings.ScrollVolumeStep = val;
+                _settings.Save();
+            }
+        }
+
+        private void OsdDurationCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isInitializing) return;
+            if (OsdDurationCombo.SelectedItem is ComboBoxItem cbi && int.TryParse(cbi.Tag?.ToString(), out int val))
+            {
+                _settings.OsdDurationMs = val;
+                _settings.Save();
+            }
         }
 
         private async void QuickSwitchHotkeyButton_Click(object sender, RoutedEventArgs e)

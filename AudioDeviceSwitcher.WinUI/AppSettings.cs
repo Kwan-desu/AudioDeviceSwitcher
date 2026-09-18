@@ -26,8 +26,11 @@ namespace AudioDeviceSwitcher
         public Dictionary<string, string> DeviceLabels { get; set; } = new Dictionary<string, string>();
 
         public bool RunAtStartup { get; set; } = false;
+        public bool StartMinimized { get; set; } = false;
         public bool EnableGlobalHotkeys { get; set; } = true;
         public bool EnableTrayScrollVolume { get; set; } = true;
+        public int OsdDurationMs { get; set; } = 1500;
+        public int ScrollVolumeStep { get; set; } = 2;
 
         public string QuickSwitchHotkey { get; set; } = "Ctrl+Shift+S";
         public string OpenMixerHotkey { get; set; } = "Ctrl+Shift+M";
