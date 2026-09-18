@@ -235,15 +235,8 @@ namespace AudioDeviceSwitcherInstaller
             }
 
             // 3. Extract payload
+            Program.ExtractPayload(installDir);
             string exePath = Path.Combine(installDir, "AudioDeviceSwitcher.exe");
-            using (var resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Payload.exe"))
-            {
-                if (resourceStream == null) throw new Exception("Payload not found.");
-                using (var fileStream = new FileStream(exePath, FileMode.Create, FileAccess.Write))
-                {
-                    resourceStream.CopyTo(fileStream);
-                }
-            }
 
             // 4. Create Shortcuts using dynamic WshShell to avoid COM references
             CreateShortcut(

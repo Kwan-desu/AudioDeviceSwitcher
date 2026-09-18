@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+*.zip
 
 # User-specific files
 *.rsuser
