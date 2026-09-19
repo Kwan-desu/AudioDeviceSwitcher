@@ -18,7 +18,7 @@ namespace AudioDeviceSwitcher
         private readonly AppSettings _settings;
         private readonly AudioDeviceManager _audioManager;
         private bool _isInitializing = true;
-        private string? _pendingUpdateUrl;
+        private UpdateInfo? _pendingUpdate;
 
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
@@ -988,8 +988,8 @@ namespace AudioDeviceSwitcher
         {
             try
             {
-                _pendingUpdateUrl = await UpdateChecker.CheckForUpdatesAsync();
-                if (!string.IsNullOrEmpty(_pendingUpdateUrl))
+                _pendingUpdate = await UpdateChecker.CheckForUpdatesAsync();
+                if (_pendingUpdate != null)
                 {
                     UpdateBadgeButton.Visibility = Visibility.Visible;
                 }
@@ -1003,29 +1003,18 @@ namespace AudioDeviceSwitcher
             btn.IsEnabled = false;
             try
             {
-                _pendingUpdateUrl = await UpdateChecker.CheckForUpdatesAsync();
-                if (!string.IsNullOrEmpty(_pendingUpdateUrl))
+                _pendingUpdate = await UpdateChecker.CheckForUpdatesAsync();
+                if (_pendingUpdate != null)
                 {
                     UpdateBadgeButton.Visibility = Visibility.Visible;
-                    var dialog = new ContentDialog
-                    {
-                        Title = "Update Available",
-                        Content = "A new version of Audio Device Switcher is available. Would you like to update now?",
-                        PrimaryButtonText = "Update Now",
-                        CloseButtonText = "Later",
-                        XamlRoot = this.Content.XamlRoot
-                    };
-                    if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-                    {
-                        await UpdateChecker.DownloadAndInstallUpdateAsync(_pendingUpdateUrl);
-                    }
+                    await ShowUpdatePromptDialogAsync(_pendingUpdate);
                 }
                 else
                 {
                     var dialog = new ContentDialog
                     {
                         Title = "Up to Date",
-                        Content = "You are using the latest version of Audio Device Switcher.",
+                        Content = $"You are using the latest version of Audio Device Switcher (v{UpdateChecker.GetCurrentVersion()}).",
                         CloseButtonText = "OK",
                         XamlRoot = this.Content.XamlRoot
                     };
@@ -1040,9 +1029,163 @@ namespace AudioDeviceSwitcher
 
         private async void UpdateBadgeButton_Click(object sender, RoutedEventArgs e)
         {
-            if (!string.IsNullOrEmpty(_pendingUpdateUrl))
+            if (_pendingUpdate != null)
             {
-                await UpdateChecker.DownloadAndInstallUpdateAsync(_pendingUpdateUrl);
+                await ShowUpdatePromptDialogAsync(_pendingUpdate);
+            }
+            else
+            {
+                CheckUpdates_Click(sender, e);
+            }
+        }
+
+        private async Task ShowUpdatePromptDialogAsync(UpdateInfo info)
+        {
+            var stack = new StackPanel { Spacing = 12 };
+            var introText = new TextBlock
+            {
+                Text = $"Version {info.VersionTag} is available! Would you like to automatically download and install it now?",
+                TextWrapping = TextWrapping.Wrap,
+                Style = (Style)Application.Current.Resources["BodyTextBlockStyle"]
+            };
+            stack.Children.Add(introText);
+
+            if (!string.IsNullOrWhiteSpace(info.ReleaseNotes))
+            {
+                var notesExpander = new Expander
+                {
+                    Header = "Release notes",
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Content = new ScrollViewer
+                    {
+                        MaxHeight = 140,
+                        Content = new TextBlock
+                        {
+                            Text = info.ReleaseNotes,
+                            TextWrapping = TextWrapping.Wrap,
+                            Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"]
+                        }
+                    }
+                };
+                stack.Children.Add(notesExpander);
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = $"Update Available ({info.VersionTag})",
+                Content = stack,
+                PrimaryButtonText = "Update Automatically",
+                SecondaryButtonText = "View on GitHub",
+                CloseButtonText = "Later",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = this.Content.XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result == ContentDialogResult.Primary)
+            {
+                await PerformAutomaticUpdateAsync(info);
+            }
+            else if (result == ContentDialogResult.Secondary)
+            {
+                if (!string.IsNullOrEmpty(info.ReleaseUrl))
+                {
+                    Process.Start(new ProcessStartInfo { FileName = info.ReleaseUrl, UseShellExecute = true });
+                }
+            }
+        }
+
+        private async Task PerformAutomaticUpdateAsync(UpdateInfo info)
+        {
+            var progressStack = new StackPanel { Spacing = 12 };
+            var statusText = new TextBlock
+            {
+                Text = "Connecting to server...",
+                Style = (Style)Application.Current.Resources["BodyTextBlockStyle"]
+            };
+            var pBar = new ProgressBar
+            {
+                Minimum = 0,
+                Maximum = 100,
+                Value = 0,
+                IsIndeterminate = true,
+                Height = 8,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            var percentText = new TextBlock
+            {
+                Text = "Starting download...",
+                Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+            };
+
+            progressStack.Children.Add(statusText);
+            progressStack.Children.Add(pBar);
+            progressStack.Children.Add(percentText);
+
+            var progressDialog = new ContentDialog
+            {
+                Title = $"Updating to {info.VersionTag}",
+                Content = progressStack,
+                CloseButtonText = "Cancel",
+                XamlRoot = this.Content.XamlRoot
+            };
+
+            var cts = new System.Threading.CancellationTokenSource();
+            progressDialog.CloseButtonClick += (s, e) =>
+            {
+                cts.Cancel();
+            };
+
+            var progress = new Progress<double>(pct =>
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    pBar.IsIndeterminate = false;
+                    pBar.Value = pct;
+                    statusText.Text = "Downloading update package...";
+                    percentText.Text = $"{pct:F0}% downloaded";
+                    if (pct >= 99.9)
+                    {
+                        statusText.Text = "Installing update & restarting...";
+                        percentText.Text = "Please wait a moment...";
+                    }
+                });
+            });
+
+            var updateTask = Task.Run(async () =>
+            {
+                await UpdateChecker.DownloadAndInstallUpdateAsync(info, progress, cts.Token);
+            });
+
+            var dialogTask = progressDialog.ShowAsync().AsTask();
+            var completedTask = await Task.WhenAny(updateTask, dialogTask);
+
+            if (completedTask == updateTask)
+            {
+                try
+                {
+                    await updateTask;
+                }
+                catch (Exception ex)
+                {
+                    progressDialog.Hide();
+                    if (!cts.IsCancellationRequested)
+                    {
+                        var errDialog = new ContentDialog
+                        {
+                            Title = "Update Failed",
+                            Content = $"Failed to install update: {ex.Message}\n\nWould you like to download it manually from GitHub?",
+                            PrimaryButtonText = "Open GitHub",
+                            CloseButtonText = "Close",
+                            XamlRoot = this.Content.XamlRoot
+                        };
+                        if (await errDialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrEmpty(info.ReleaseUrl))
+                        {
+                            Process.Start(new ProcessStartInfo { FileName = info.ReleaseUrl, UseShellExecute = true });
+                        }
+                    }
+                }
             }
         }
     }

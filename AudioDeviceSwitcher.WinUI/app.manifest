@@ -2,7 +2,7 @@
 <assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
 
   <assemblyIdentity
-    version="1.6.0.0"
+    version="1.6.1.0"
     name="AudioDeviceSwitcher.app" />
 
   <!-- Windows common controls v6 (visual styles) so Win32 fallback chrome

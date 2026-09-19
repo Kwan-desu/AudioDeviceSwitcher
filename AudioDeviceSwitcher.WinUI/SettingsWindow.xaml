@@ -302,7 +302,7 @@
                                 <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                     <TextBlock Text="Audio Device Switcher" Style="{StaticResource BodyStrongTextBlockStyle}"
                                                Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                    <TextBlock x:Name="VersionTextBlock" Text="Version 1.6.0 (WinUI 3 Fluent 2)"
+                                    <TextBlock x:Name="VersionTextBlock" Text="Version 1.6.1 (WinUI 3 Fluent 2)"
                                                Style="{StaticResource CaptionTextBlockStyle}"
                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                 </StackPanel>
