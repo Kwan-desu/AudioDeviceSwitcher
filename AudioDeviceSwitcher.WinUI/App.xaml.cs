@@ -247,19 +247,33 @@ namespace AudioDeviceSwitcher
         [System.Runtime.InteropServices.DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+        private DateTime _lastMixerClosedTime = DateTime.MinValue;
+
         public void ShowMixerWindow()
         {
+            var now = DateTime.UtcNow;
             if (CurrentMixerWindow != null)
             {
                 CurrentMixerWindow.Close();
                 CurrentMixerWindow = null;
+                _lastMixerClosedTime = now;
+                return;
+            }
+
+            if ((now - _lastMixerClosedTime).TotalMilliseconds < 800)
+            {
+                Log("[App] ShowMixerWindow skipped (recently closed/toggled via tray click)");
                 return;
             }
 
             try
             {
                 CurrentMixerWindow = new MixerWindow();
-                CurrentMixerWindow.Closed += (s, e) => CurrentMixerWindow = null;
+                CurrentMixerWindow.Closed += (s, e) =>
+                {
+                    CurrentMixerWindow = null;
+                    _lastMixerClosedTime = DateTime.UtcNow;
+                };
                 CurrentMixerWindow.Activate();
                 try
                 {

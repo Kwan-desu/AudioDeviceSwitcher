@@ -249,8 +249,8 @@ namespace AudioDeviceSwitcher
             uint dpi = GetDpiForWindow(hWnd);
             double scale = (dpi > 0 ? dpi : 96) / 96.0;
 
-            int winWidth = (int)(340 * scale);
-            int dips = desiredHeightDips ?? 340;
+            int winWidth = (int)(365 * scale);
+            int dips = desiredHeightDips ?? 350;
             int winHeight = (int)(dips * scale);
 
             GetCursorPos(out POINT pt);
@@ -482,8 +482,7 @@ namespace AudioDeviceSwitcher
             else
             {
                 MasterDeviceNameText.Text = "No audio device";
-                EmptyAppsText.Text = "No audio playback device detected";
-                EmptyAppsText.Visibility = Visibility.Visible;
+                SetEmptyAppsState(true, "No audio playback device detected");
             }
 
             _isUpdatingUi = false;
@@ -495,9 +494,24 @@ namespace AudioDeviceSwitcher
             if (appWindow != null)
             {
                 int appCount = AppSessionsContainer.Children.Count;
-                int computedDips = 220 + (appCount > 0 ? (appCount * 42) : 24);
-                computedDips = Math.Clamp(computedDips, 240, 500);
+                int baseHeight = 230;
+                int computedDips = appCount == 0
+                    ? baseHeight + 55
+                    : baseHeight + (appCount * 54) + 12;
+                computedDips = Math.Clamp(computedDips, 285, 540);
                 PositionNearTray(appWindow, hWnd, computedDips);
+            }
+        }
+
+        private void SetEmptyAppsState(bool isEmpty, string message = "No applications playing audio")
+        {
+            if (EmptyAppsText != null)
+            {
+                EmptyAppsText.Text = message;
+            }
+            if (EmptyAppsPanel != null)
+            {
+                EmptyAppsPanel.Visibility = isEmpty ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -508,7 +522,7 @@ namespace AudioDeviceSwitcher
                 var sessionController = defaultDevice.SessionController;
                 if (sessionController == null)
                 {
-                    EmptyAppsText.Visibility = Visibility.Visible;
+                    SetEmptyAppsState(true);
                     return;
                 }
 
@@ -519,11 +533,11 @@ namespace AudioDeviceSwitcher
 
                 if (sessions.Count == 0)
                 {
-                    EmptyAppsText.Visibility = Visibility.Visible;
+                    SetEmptyAppsState(true);
                     return;
                 }
 
-                EmptyAppsText.Visibility = Visibility.Collapsed;
+                SetEmptyAppsState(false);
 
                 foreach (var session in sessions)
                 {
@@ -544,23 +558,28 @@ namespace AudioDeviceSwitcher
             }
             catch
             {
-                EmptyAppsText.Visibility = Visibility.Visible;
+                SetEmptyAppsState(true);
             }
         }
 
         private UIElement CreateAppRow(IAudioSession session, string displayName)
         {
-            var grid = new Grid { ColumnSpacing = 10 };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var card = new Grid
+            {
+                ColumnSpacing = 10,
+                Padding = new Thickness(0, 3, 0, 3)
+            };
+            card.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            card.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            // 1. App Icon / Mute Button
             var iconBtn = new Button
             {
                 Width = 32,
                 Height = 32,
                 Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(4),
+                CornerRadius = new CornerRadius(5),
                 Background = new SolidColorBrush(Colors.Transparent),
                 BorderThickness = new Thickness(0),
                 VerticalAlignment = VerticalAlignment.Center
@@ -590,33 +609,58 @@ namespace AudioDeviceSwitcher
                 iconBtn.Content = fallbackIcon;
             }
 
-            ToolTipService.SetToolTip(iconBtn, $"{displayName} • Click to mute");
+            ToolTipService.SetToolTip(iconBtn, $"{displayName} (Click to mute)");
             Grid.SetColumn(iconBtn, 0);
-            grid.Children.Add(iconBtn);
+            card.Children.Add(iconBtn);
+
+            // 2. Middle Column: App Display Name + Volume Slider
+            var middleStack = new StackPanel
+            {
+                Spacing = 2,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var appTitleText = new TextBlock
+            {
+                Text = displayName,
+                FontSize = 11.5,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxLines = 1
+            };
+            middleStack.Children.Add(appTitleText);
 
             var slider = new Slider
             {
                 Minimum = 0,
                 Maximum = 100,
                 Value = session.Volume,
-                Height = 32,
+                Height = 28,
+                Margin = new Thickness(0, -2, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
             ToolTipService.SetToolTip(slider, $"{(int)session.Volume}%");
-            Grid.SetColumn(slider, 1);
-            grid.Children.Add(slider);
+            middleStack.Children.Add(slider);
 
+            Grid.SetColumn(middleStack, 1);
+            card.Children.Add(middleStack);
+
+            // 3. Right Column: Volume Percentage Text
             var percentText = new TextBlock
             {
                 Text = session.IsMuted ? "0%" : $"{(int)session.Volume}%",
-                Width = 34,
+                Width = 42,
                 FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                 TextAlignment = TextAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(percentText, 2);
-            grid.Children.Add(percentText);
+            card.Children.Add(percentText);
+
+            iconBtn.Opacity = session.IsMuted ? 0.35 : 1.0;
 
             slider.ValueChanged += (s, e) =>
             {
@@ -625,17 +669,17 @@ namespace AudioDeviceSwitcher
                 if (session.IsMuted && slider.Value > 0) session.IsMuted = false;
                 percentText.Text = session.IsMuted ? "0%" : $"{(int)slider.Value}%";
                 ToolTipService.SetToolTip(slider, $"{(int)slider.Value}%");
-                iconBtn.Opacity = session.IsMuted ? 0.4 : 1.0;
+                iconBtn.Opacity = session.IsMuted ? 0.35 : 1.0;
             };
 
             iconBtn.Click += (s, e) =>
             {
                 session.IsMuted = !session.IsMuted;
-                iconBtn.Opacity = session.IsMuted ? 0.4 : 1.0;
+                iconBtn.Opacity = session.IsMuted ? 0.35 : 1.0;
                 percentText.Text = session.IsMuted ? "0%" : $"{(int)session.Volume}%";
             };
 
-            return grid;
+            return card;
         }
 
         private static ImageSource? GetAppIcon(string? exePath)

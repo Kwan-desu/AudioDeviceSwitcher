@@ -11,15 +11,22 @@
                 CornerRadius="8"
                 BorderThickness="0"
                 Background="{ThemeResource AcrylicFlyoutFillColorBrush}">
-            <Grid Padding="18,16,18,14">
+            <Grid Padding="16,14,16,12">
                 <Grid.RowDefinitions>
+                    <!-- Row 0: Header (Title, Settings, Close) -->
                     <RowDefinition Height="Auto" />
+                    <!-- Row 1: Master Device Section (Selector Button + Master Slider) -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Row 2: Apps Section Header ("Apps" + Divider line) -->
+                    <RowDefinition Height="Auto" />
+                    <!-- Row 3: Application Sliders (Scrollable if > 4 apps) -->
                     <RowDefinition Height="*" />
+                    <!-- Row 4: Footer ("More volume settings") -->
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <!-- 1. Header: "Volume mixer" title + Settings gear button + Close 'X' button -->
-                <Grid Grid.Row="0" Margin="0,0,0,14">
+                <!-- 0. Header: "Volume mixer" title + Settings gear button + Close 'X' button -->
+                <Grid Grid.Row="0" Margin="0,0,0,12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -47,175 +54,201 @@
                     </Button>
                 </Grid>
 
-                <!-- 2. Main Scrollable List: Master Device Section + Application Sliders -->
-                <ScrollViewer Grid.Row="1"
-                              HorizontalScrollBarVisibility="Disabled"
-                              VerticalScrollBarVisibility="Auto"
-                              Padding="0,0,2,0">
-                    <StackPanel Spacing="10">
-                        <!-- Master Output Section -->
-                        <StackPanel x:Name="MasterSection" Spacing="8">
-                            <!-- Output Device Selector Button (Click to open switcher flyout) -->
-                            <Button x:Name="DeviceSelectorButton"
-                                    HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch"
-                                    Padding="10,8,10,8"
-                                    Background="{ThemeResource SubtleFillColorSecondaryBrush}"
-                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="6">
-                                <Button.Flyout>
-                                    <Flyout x:Name="DeviceSwitcherFlyout" Placement="BottomEdgeAlignedLeft">
-                                        <Flyout.FlyoutPresenterStyle>
-                                            <Style TargetType="FlyoutPresenter">
-                                                <Setter Property="Padding" Value="6" />
-                                                <Setter Property="CornerRadius" Value="8" />
-                                                <Setter Property="MinWidth" Value="280" />
-                                                <Setter Property="MaxWidth" Value="340" />
-                                            </Style>
-                                        </Flyout.FlyoutPresenterStyle>
-                                        <StackPanel Spacing="4">
-                                            <TextBlock Text="Select playback device"
-                                                       FontSize="11.5"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                                       Margin="8,4,8,6" />
-                                            <ScrollViewer MaxHeight="220" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                                                <StackPanel x:Name="DeviceListContainer" Spacing="2" />
-                                            </ScrollViewer>
-                                        </StackPanel>
-                                    </Flyout>
-                                </Button.Flyout>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- Device Type Icon -->
-                                    <FontIcon x:Name="MasterDeviceGlyph"
-                                              Glyph="&#xE995;"
-                                              FontSize="16"
-                                              Foreground="{ThemeResource SystemAccentColorBrush}"
-                                              VerticalAlignment="Center"
-                                              Margin="0,0,10,0" />
-
-                                    <!-- Device Name + Custom Label -->
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                        <TextBlock x:Name="MasterDeviceNameText"
-                                                   Text="Speakers"
-                                                   FontSize="12.5"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   MaxLines="1"
-                                                   VerticalAlignment="Center" />
-                                        <Border x:Name="MasterDeviceLabelBadge"
-                                                Visibility="Collapsed"
-                                                CornerRadius="4"
-                                                Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
-                                                Padding="5,1,5,1"
-                                                VerticalAlignment="Center">
-                                            <TextBlock x:Name="MasterDeviceLabelText"
-                                                       Text="AUX 1"
-                                                       FontSize="10"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                        </Border>
-                                    </StackPanel>
-
-                                    <!-- Chevron Dropdown Arrow -->
-                                    <FontIcon Grid.Column="2"
-                                              Glyph="&#xE70D;"
-                                              FontSize="10"
-                                              Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                              VerticalAlignment="Center"
-                                              Margin="8,0,2,0" />
-                                </Grid>
-                            </Button>
-
-                            <!-- Master Volume Slider Row -->
-                            <Grid x:Name="MasterSliderRow" ColumnSpacing="10" Margin="0,2,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <Button x:Name="MasterMuteButton"
-                                        Width="32" Height="32" Padding="0"
-                                        CornerRadius="4"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        VerticalAlignment="Center"
-                                        Click="MasterMuteButton_Click">
-                                    <FontIcon x:Name="MasterMuteIcon" Glyph="&#xE995;" FontSize="17"
-                                              Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
-                                </Button>
-
-                                <Slider x:Name="MasterVolumeSlider"
-                                        Grid.Column="1"
-                                        Minimum="0" Maximum="100"
-                                        Height="32"
-                                        VerticalAlignment="Center" />
-
-                                <TextBlock x:Name="MasterVolumePercentText"
-                                           Grid.Column="2"
-                                           Text="50%"
-                                           Width="34"
-                                           FontSize="12"
-                                           FontWeight="SemiBold"
-                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                                           TextAlignment="Right"
-                                           VerticalAlignment="Center" />
-                            </Grid>
-                        </StackPanel>
-
-                        <!-- Section Divider -->
-                        <Grid x:Name="AppsSectionHeader" Margin="0,4,0,2">
+                <!-- 1. Master Output Section: Pinned at top outside ScrollViewer -->
+                <StackPanel Grid.Row="1" x:Name="MasterSection" Spacing="8" Margin="0,0,0,10">
+                    <!-- Output Device Selector Button (Click to open switcher flyout) -->
+                    <Button x:Name="DeviceSelectorButton"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            Padding="10,8,10,8"
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <Button.Flyout>
+                            <Flyout x:Name="DeviceSwitcherFlyout" Placement="BottomEdgeAlignedLeft">
+                                <Flyout.FlyoutPresenterStyle>
+                                    <Style TargetType="FlyoutPresenter">
+                                        <Setter Property="Padding" Value="6" />
+                                        <Setter Property="CornerRadius" Value="8" />
+                                        <Setter Property="MinWidth" Value="300" />
+                                        <Setter Property="MaxWidth" Value="360" />
+                                    </Style>
+                                </Flyout.FlyoutPresenterStyle>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Select playback device"
+                                               FontSize="11.5"
+                                               FontWeight="SemiBold"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               Margin="8,4,8,6" />
+                                    <ScrollViewer MaxHeight="240" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+                                        <StackPanel x:Name="DeviceListContainer" Spacing="2" />
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Apps"
-                                       FontSize="11.5"
-                                       FontWeight="SemiBold"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                       VerticalAlignment="Center"
-                                       Margin="0,0,8,0" />
-                            <Border Grid.Column="1" Height="1"
-                                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
-                                    VerticalAlignment="Center" />
-                        </Grid>
 
-                        <!-- Application Volume Sliders -->
-                        <StackPanel x:Name="AppSessionsContainer" Spacing="8" />
+                            <!-- Device Type Icon -->
+                            <FontIcon x:Name="MasterDeviceGlyph"
+                                      Glyph="&#xE995;"
+                                      FontSize="16"
+                                      Foreground="{ThemeResource SystemAccentColorBrush}"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,10,0" />
+
+                            <!-- Device Name + Custom Label Badge -->
+                            <Grid Grid.Column="1" ColumnSpacing="6" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="MasterDeviceNameText"
+                                           Text="Speakers"
+                                           FontSize="12.5"
+                                           FontWeight="SemiBold"
+                                           Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           MaxLines="1"
+                                           VerticalAlignment="Center" />
+                                <Border x:Name="MasterDeviceLabelBadge"
+                                        Grid.Column="1"
+                                        Visibility="Collapsed"
+                                        CornerRadius="4"
+                                        Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
+                                        Padding="5,1,5,1"
+                                        VerticalAlignment="Center">
+                                    <TextBlock x:Name="MasterDeviceLabelText"
+                                               Text="AUX 1"
+                                               FontSize="10"
+                                               FontWeight="SemiBold"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </Border>
+                            </Grid>
+
+                            <!-- Chevron Dropdown Arrow -->
+                            <FontIcon Grid.Column="2"
+                                      Glyph="&#xE70D;"
+                                      FontSize="10"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                      VerticalAlignment="Center"
+                                      Margin="8,0,2,0" />
+                        </Grid>
+                    </Button>
+
+                    <!-- Master Volume Slider Row -->
+                    <!-- Inset right by 12px to match app sliders with scrollbar gutter -->
+                    <Grid x:Name="MasterSliderRow" ColumnSpacing="10" Margin="0,2,12,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button x:Name="MasterMuteButton"
+                                Width="32" Height="32" Padding="0"
+                                CornerRadius="4"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center"
+                                Click="MasterMuteButton_Click">
+                            <FontIcon x:Name="MasterMuteIcon" Glyph="&#xE995;" FontSize="17"
+                                      Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+                        </Button>
+
+                        <Slider x:Name="MasterVolumeSlider"
+                                Grid.Column="1"
+                                Minimum="0" Maximum="100"
+                                Height="32"
+                                VerticalAlignment="Center" />
+
+                        <TextBlock x:Name="MasterVolumePercentText"
+                                   Grid.Column="2"
+                                   Text="50%"
+                                   Width="42"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   TextAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- 2. Section Divider for Apps -->
+                <Grid x:Name="AppsSectionHeader" Grid.Row="2" Margin="0,2,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Apps"
+                               FontSize="11.5"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0" />
+                    <Border Grid.Column="1" Height="1"
+                            Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                            VerticalAlignment="Center" />
+                </Grid>
+
+                <!-- 3. Scrollable List of Applications: Dedicated 12px right padding ensures scrollbar NEVER overlaps controls -->
+                <ScrollViewer Grid.Row="3"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto"
+                              Padding="0,0,12,0">
+                    <StackPanel>
+                        <!-- Container for dynamic application volume cards -->
+                        <StackPanel x:Name="AppSessionsContainer" Spacing="6" />
 
                         <!-- Empty state when no apps -->
-                        <TextBlock x:Name="EmptyAppsText"
-                                   Text="No applications currently playing audio"
-                                   Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,12,0,8"
-                                   Visibility="Collapsed" />
+                        <StackPanel x:Name="EmptyAppsPanel"
+                                    Orientation="Vertical"
+                                    HorizontalAlignment="Center"
+                                    Spacing="6"
+                                    Margin="0,16,0,16"
+                                    Visibility="Collapsed">
+                            <FontIcon Glyph="&#xE995;" FontSize="20"
+                                      Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                      HorizontalAlignment="Center" />
+                            <TextBlock x:Name="EmptyAppsText"
+                                       Text="No applications playing audio"
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       HorizontalAlignment="Center" />
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
 
-                <!-- 3. Footer: "More volume settings" -->
-                <Grid Grid.Row="2" Margin="0,12,0,0">
+                <!-- 4. Footer: "More volume settings" -->
+                <Grid Grid.Row="4" Margin="0,8,0,0">
                     <Button x:Name="MoreSettingsButton"
                             HorizontalAlignment="Stretch"
-                            HorizontalContentAlignment="Left"
-                            Padding="6,8,6,8"
+                            HorizontalContentAlignment="Stretch"
+                            Padding="8,7,8,7"
                             Background="Transparent"
                             BorderThickness="0"
                             CornerRadius="4"
                             Click="MoreSettingsButton_Click">
-                        <TextBlock Text="More volume settings"
-                                   FontSize="12.5"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="More volume settings"
+                                       FontSize="12"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                            <FontIcon Grid.Column="1"
+                                      Glyph="&#xE713;"
+                                      FontSize="12"
+                                      Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                      VerticalAlignment="Center" />
+                        </Grid>
                     </Button>
                 </Grid>
             </Grid>
