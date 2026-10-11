@@ -142,8 +142,8 @@
                     </Button>
 
                     <!-- Master Volume Slider Row -->
-                    <!-- Inset right by 12px to match app sliders with scrollbar gutter -->
-                    <Grid x:Name="MasterSliderRow" ColumnSpacing="10" Margin="0,2,12,0">
+                    <!-- Inset right by 16px to match app sliders with scrollbar gutter -->
+                    <Grid x:Name="MasterSliderRow" ColumnSpacing="10" Margin="0,2,16,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
@@ -196,11 +196,11 @@
                             VerticalAlignment="Center" />
                 </Grid>
 
-                <!-- 3. Scrollable List of Applications: Dedicated 12px right padding ensures scrollbar NEVER overlaps controls -->
+                <!-- 3. Scrollable List of Applications: 16px right margin ensures scrollbar NEVER overlaps controls -->
                 <ScrollViewer Grid.Row="3"
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto"
-                              Padding="0,0,12,0">
+                              Margin="0,0,16,0">
                     <StackPanel>
                         <!-- Container for dynamic application volume cards -->
                         <StackPanel x:Name="AppSessionsContainer" Spacing="6" />
