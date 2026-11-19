@@ -27,9 +27,10 @@ jobs:
       - name: Restore & Publish WinUI 3 App (win-x64)
         shell: pwsh
         run: |
+          dotnet restore AudioDeviceSwitcher.WinUI/AudioDeviceSwitcher.WinUI.csproj -r win-x64
           $publishDir = (Join-Path $PWD "publish\winui") + "\"
           msbuild AudioDeviceSwitcher.WinUI\AudioDeviceSwitcher.WinUI.csproj `
-            /t:Restore,Publish `
+            /t:Publish `
             /p:Configuration=Release `
             /p:Platform=x64 `
             /p:RuntimeIdentifier=win-x64 `
