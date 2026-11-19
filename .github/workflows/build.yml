@@ -1,0 +1,65 @@
+name: Build Windows Executable
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore & Publish WinUI 3 App (win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish AudioDeviceSwitcher.WinUI/AudioDeviceSwitcher.WinUI.csproj `
+            -c Release `
+            -r win-x64 `
+            -p:Platform=x64 `
+            --self-contained true `
+            -o publish/winui
+
+      - name: Package WinUI payload zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+          if (Test-Path AudioDeviceSwitcherInstaller/payload.zip) {
+            Remove-Item AudioDeviceSwitcherInstaller/payload.zip -Force
+          }
+          Compress-Archive -Path publish/winui/* -DestinationPath AudioDeviceSwitcherInstaller/payload.zip -CompressionLevel Optimal
+          Copy-Item AudioDeviceSwitcherInstaller/payload.zip artifacts/AudioDeviceSwitcher-WinUI-win-x64.zip
+
+      - name: Publish Single-File Portable & Installer EXE (win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish AudioDeviceSwitcherInstaller/AudioDeviceSwitcherInstaller.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -o publish/installer
+
+          Copy-Item publish/installer/AudioDeviceSwitcherInstaller.exe artifacts/AudioDeviceSwitcherInstaller.exe
+          Copy-Item publish/installer/AudioDeviceSwitcherInstaller.exe artifacts/AudioDeviceSwitcher.exe
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioDeviceSwitcher-win-x64
+          path: |
+            artifacts/AudioDeviceSwitcher.exe
+            artifacts/AudioDeviceSwitcherInstaller.exe
+            artifacts/AudioDeviceSwitcher-WinUI-win-x64.zip
+          retention-days: 30

@@ -260,7 +260,7 @@ namespace AudioDeviceSwitcher
                 return;
             }
 
-            if ((now - _lastMixerClosedTime).TotalMilliseconds < 800)
+            if ((now - _lastMixerClosedTime).TotalMilliseconds < 350)
             {
                 Log("[App] ShowMixerWindow skipped (recently closed/toggled via tray click)");
                 return;

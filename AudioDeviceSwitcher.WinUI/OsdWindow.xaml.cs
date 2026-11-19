@@ -127,11 +127,11 @@ namespace AudioDeviceSwitcher
                 PositionBottomCenter(_appWindow, _hWnd);
             }
 
-            // Non-focusable tool window style & strip border styles
+            // Non-focusable, click-through tool window style & strip border styles
             try
             {
                 int exStyle = GetWindowLong(_hWnd, GWL_EXSTYLE);
-                SetWindowLong(_hWnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+                SetWindowLong(_hWnd, GWL_EXSTYLE, exStyle | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT);
 
                 // Strip WS_DLGFRAME / WS_BORDER / WS_THICKFRAME to kill WASDK 1.6 white border regression
                 int style = GetWindowLong(_hWnd, GWL_STYLE);
@@ -167,7 +167,7 @@ namespace AudioDeviceSwitcher
                 int round = 2;
                 DwmSetWindowAttribute(_hWnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
 
-                // Suppress OS window border
+                // Suppress OS window border (we draw our own 1px FlyoutSurfaceStrokeBrush border)
                 int noneBorder = DWMWA_COLOR_NONE;
                 int hrBorder = DwmSetWindowAttribute(_hWnd, DWMWA_BORDER_COLOR, ref noneBorder, sizeof(int));
                 if (hrBorder != 0)
@@ -187,8 +187,8 @@ namespace AudioDeviceSwitcher
             uint dpi = GetDpiForWindow(hWnd);
             double scale = (dpi > 0 ? dpi : 96) / 96.0;
 
-            int winWidth = (int)(340 * scale);
-            int winHeight = (int)(52 * scale);
+            int winWidth = (int)(348 * scale);
+            int winHeight = (int)(58 * scale);
 
             GetCursorPos(out POINT pt);
             IntPtr hMon = MonitorFromPoint(pt, 2 /* MONITOR_DEFAULTTONEAREST */);
@@ -229,21 +229,34 @@ namespace AudioDeviceSwitcher
             _entranceStoryboard?.Stop();
 
             _entranceStoryboard = new Storyboard();
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
             var fadeIn = new DoubleAnimation
             {
                 From = 0.0,
                 To = 1.0,
                 Duration = TimeSpan.FromMilliseconds(150),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+                EasingFunction = ease
             };
             Storyboard.SetTarget(fadeIn, RootGrid);
             Storyboard.SetTargetProperty(fadeIn, "Opacity");
 
+            var slideUp = new DoubleAnimation
+            {
+                From = 8.0,
+                To = 0.0,
+                Duration = TimeSpan.FromMilliseconds(160),
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(slideUp, RootTranslate);
+            Storyboard.SetTargetProperty(slideUp, "Y");
+
             _entranceStoryboard.Children.Add(fadeIn);
+            _entranceStoryboard.Children.Add(slideUp);
             _entranceStoryboard.Completed += (s, e) =>
             {
                 RootGrid.Opacity = 1.0;
+                RootTranslate.Y = 0.0;
             };
             _entranceStoryboard.Begin();
         }
@@ -309,9 +322,17 @@ namespace AudioDeviceSwitcher
                 VolumeModeGrid.Visibility = Visibility.Visible;
                 SwitchModeGrid.Visibility = Visibility.Collapsed;
 
+                bool isMuted = glyph == "\uE74F";
                 VolumeGlyphIcon.Glyph = glyph;
+                VolumeGlyphIcon.Foreground = isMuted
+                    ? (Brush)Application.Current.Resources["MutedStatusBrush"]
+                    : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+
                 VolumeDeviceNameText.Text = deviceName;
-                VolumePercentText.Text = glyph == "\uE74F" ? "Muted" : $"{volume.Value}%";
+                VolumePercentText.Text = isMuted ? "Muted" : $"{volume.Value}%";
+                VolumePercentText.Foreground = isMuted
+                    ? (Brush)Application.Current.Resources["MutedStatusBrush"]
+                    : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
 
                 if (_isFirstShow)
                 {
@@ -327,9 +348,7 @@ namespace AudioDeviceSwitcher
                 VolumeModeGrid.Visibility = Visibility.Collapsed;
                 SwitchModeGrid.Visibility = Visibility.Visible;
 
-                bool isHeadphone = deviceName.Contains("head", StringComparison.OrdinalIgnoreCase) ||
-                                   deviceName.Contains("ear", StringComparison.OrdinalIgnoreCase);
-                SwitchGlyphIcon.Glyph = isHeadphone ? "\uE7F6" : "\uE995";
+                SwitchGlyphIcon.Glyph = !string.IsNullOrEmpty(glyph) ? glyph : "\uE995";
                 SwitchTitleText.Text = title;
                 SwitchDeviceNameText.Text = deviceName;
             }
@@ -351,8 +370,8 @@ namespace AudioDeviceSwitcher
 
             _isFirstShow = false;
 
-            _appWindow?.Show();
-            Activate();
+            // Show without activating so fullscreen apps & games never lose focus
+            _appWindow?.Show(false);
             if (_hWnd != IntPtr.Zero)
             {
                 SetWindowPos(_hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | SWP_NOACTIVATE);

@@ -279,6 +279,23 @@ namespace AudioDeviceSwitcher
             return MoveDevice(index, index + 1);
         }
 
+        public bool RemoveDevice(Guid id, string? fullName = null)
+        {
+            int removed = ConfiguredDevices.RemoveAll(c =>
+                c.Id == id ||
+                (!string.IsNullOrWhiteSpace(fullName) && !string.IsNullOrWhiteSpace(c.FullName) &&
+                 string.Equals(c.FullName, fullName, StringComparison.OrdinalIgnoreCase)));
+
+            if (removed > 0)
+            {
+                DeviceLabels.Remove(id.ToString());
+                SyncLegacyCollections();
+                Save();
+                return true;
+            }
+            return false;
+        }
+
         public void UpdateOrAddDevice(Guid id, string fullName, string interfaceName, string name, bool quickSwitch, bool mixer, string customLabel)
         {
             var match = ConfiguredDevices.FirstOrDefault(c =>

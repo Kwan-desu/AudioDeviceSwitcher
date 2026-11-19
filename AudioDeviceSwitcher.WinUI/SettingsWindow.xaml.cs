@@ -18,9 +18,13 @@ namespace AudioDeviceSwitcher
         private readonly AppSettings _settings;
         private readonly AudioDeviceManager _audioManager;
         private bool _isInitializing = true;
+        private bool _isUpdatingHero = false;
         private UpdateInfo? _pendingUpdate;
 
         private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hWnd);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
@@ -93,10 +97,12 @@ namespace AudioDeviceSwitcher
                     SetTitleBar(AppTitleBar);
                 }
 
-                // Set default window size (680x640)
+                // Set DPI-scaled default window size (840x640 DIPs)
                 if (appWindow != null)
                 {
-                    appWindow.Resize(new Windows.Graphics.SizeInt32(680, 640));
+                    uint dpi = GetDpiForWindow(hWnd);
+                    double scale = (dpi > 0 ? dpi : 96) / 96.0;
+                    appWindow.Resize(new Windows.Graphics.SizeInt32((int)(840 * scale), (int)(640 * scale)));
 
                     appWindow.Closing += (s, e) =>
                     {
@@ -116,6 +122,7 @@ namespace AudioDeviceSwitcher
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
             var appWindow = AppWindow.GetFromWindowId(windowId);
+            ReloadDevices();
             appWindow?.Show();
             Activate();
         }
@@ -180,12 +187,161 @@ namespace AudioDeviceSwitcher
             }
         }
 
+        private void MainNavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+        {
+            if (DevicesSectionPanel == null || MixerSectionPanel == null ||
+                ShortcutsSectionPanel == null || AppearanceSectionPanel == null)
+            {
+                return;
+            }
+
+            string tag = (args.SelectedItem as NavigationViewItem)?.Tag?.ToString() ?? "devices";
+
+            DevicesSectionPanel.Visibility = tag == "devices" ? Visibility.Visible : Visibility.Collapsed;
+            MixerSectionPanel.Visibility = tag == "mixer" ? Visibility.Visible : Visibility.Collapsed;
+            ShortcutsSectionPanel.Visibility = tag == "shortcuts" ? Visibility.Visible : Visibility.Collapsed;
+            AppearanceSectionPanel.Visibility = tag == "appearance" ? Visibility.Visible : Visibility.Collapsed;
+
+            ContentScrollViewer?.ChangeView(null, 0, null, true);
+
+            if (tag == "devices")
+            {
+                UpdateHeroDeviceCard();
+            }
+        }
+
+        private static string GetDeviceGlyph(string deviceName)
+        {
+            bool isHeadphone = deviceName.Contains("head", StringComparison.OrdinalIgnoreCase) ||
+                               deviceName.Contains("ear", StringComparison.OrdinalIgnoreCase) ||
+                               deviceName.Contains("phone", StringComparison.OrdinalIgnoreCase);
+            return isHeadphone ? "\uE7F6" : "\uE7F5";
+        }
+
+        private static string GetVolumeGlyph(double volume, bool isMuted)
+        {
+            if (isMuted || volume <= 0.5) return "\uE74F";
+            if (volume <= 33) return "\uE993";
+            if (volume <= 66) return "\uE994";
+            return "\uE995";
+        }
+
+        private void UpdateHeroDeviceCard()
+        {
+            if (HeroDeviceNameText == null) return;
+            _isUpdatingHero = true;
+            try
+            {
+                var currentDefault = _audioManager.GetDefaultPlaybackDevice();
+                if (currentDefault != null)
+                {
+                    HeroDeviceGlyph.Glyph = GetDeviceGlyph(currentDefault.FullName);
+                    HeroDeviceNameText.Text = currentDefault.FullName;
+
+                    int idx = _settings.SelectedDeviceIds.IndexOf(currentDefault.Id);
+                    string label = _settings.GetLabelForDevice(currentDefault.Id, currentDefault.FullName, Math.Max(0, idx));
+                    if (!string.IsNullOrWhiteSpace(label) && !label.Equals(currentDefault.FullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        HeroDeviceBadgeText.Text = label;
+                        HeroDeviceBadge.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        HeroDeviceBadge.Visibility = Visibility.Collapsed;
+                    }
+
+                    double vol = Math.Clamp(currentDefault.Volume, 0, 100);
+                    bool muted = currentDefault.IsMuted;
+                    HeroVolumeSlider.IsEnabled = true;
+                    HeroMuteButton.IsEnabled = true;
+                    HeroVolumeSlider.Value = vol;
+                    HeroVolumeSlider.Opacity = muted ? 0.45 : 1.0;
+                    HeroMuteIcon.Glyph = GetVolumeGlyph(vol, muted);
+                    HeroMuteIcon.Foreground = muted
+                        ? (Brush)Application.Current.Resources["MutedStatusBrush"]
+                        : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+                    HeroVolumePercentText.Text = muted ? "Muted" : $"{(int)Math.Round(vol)}%";
+                    HeroVolumePercentText.Foreground = muted
+                        ? (Brush)Application.Current.Resources["MutedStatusBrush"]
+                        : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+                }
+                else
+                {
+                    HeroDeviceGlyph.Glyph = "\uE74F";
+                    HeroDeviceNameText.Text = "No active playback device";
+                    HeroDeviceBadge.Visibility = Visibility.Collapsed;
+                    HeroVolumeSlider.IsEnabled = false;
+                    HeroMuteButton.IsEnabled = false;
+                    HeroVolumeSlider.Value = 0;
+                    HeroVolumePercentText.Text = "--";
+                }
+            }
+            catch { }
+            finally
+            {
+                _isUpdatingHero = false;
+            }
+        }
+
+        private void HeroQuickSwitchButton_Click(object sender, RoutedEventArgs e)
+        {
+            App.CurrentApp.QuickSwitch();
+            ReloadDevices();
+        }
+
+        private void HeroOpenMixerButton_Click(object sender, RoutedEventArgs e)
+        {
+            App.CurrentApp.ShowMixerWindow();
+        }
+
+        private void HeroMuteButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dev = _audioManager.GetDefaultPlaybackDevice();
+            if (dev == null) return;
+            dev.Mute(!dev.IsMuted);
+            UpdateHeroDeviceCard();
+            App.CurrentApp.UpdateTrayState();
+        }
+
+        private void HeroVolumeSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
+        {
+            if (_isUpdatingHero || _isInitializing) return;
+            var dev = _audioManager.GetDefaultPlaybackDevice();
+            if (dev == null) return;
+
+            dev.Volume = HeroVolumeSlider.Value;
+            if (dev.IsMuted && HeroVolumeSlider.Value > 0)
+            {
+                dev.Mute(false);
+            }
+            UpdateHeroDeviceCard();
+            App.CurrentApp.UpdateTrayState();
+        }
+
+        private void PreviewVolumeOsd_Click(object sender, RoutedEventArgs e)
+        {
+            var dev = _audioManager.GetDefaultPlaybackDevice();
+            string name = dev?.FullName ?? "Headphones (Preview)";
+            int vol = dev != null ? Math.Clamp((int)Math.Round(dev.Volume), 0, 100) : 64;
+            bool muted = dev?.IsMuted ?? false;
+            App.CurrentApp.ShowOsd("Volume adjusted", name, GetVolumeGlyph(vol, muted), muted ? 0 : vol);
+        }
+
+        private void PreviewSwitchOsd_Click(object sender, RoutedEventArgs e)
+        {
+            var dev = _audioManager.GetDefaultPlaybackDevice();
+            string name = dev?.FullName ?? "Headphones (Preview)";
+            App.CurrentApp.ShowOsd("Audio playback switched", name, GetDeviceGlyph(name));
+        }
+
         private void LoadSettingsUi()
         {
             StartupToggle.IsOn = _settings.RunAtStartup;
             StartMinimizedToggle.IsOn = _settings.StartMinimized;
             HotkeysToggle.IsOn = _settings.EnableGlobalHotkeys;
             TrayScrollToggle.IsOn = _settings.EnableTrayScrollVolume;
+
+            VersionTextBlock.Text = $"Version {UpdateChecker.GetCurrentVersion()} (WinUI 3 Fluent 2)";
 
             // Scroll Step Combo
             foreach (var item in ScrollStepCombo.Items)
@@ -241,6 +397,9 @@ namespace AudioDeviceSwitcher
 
             var activeDevices = _audioManager.GetActivePlaybackDevices();
             _settings.SyncActiveDevices(activeDevices);
+            var currentDefault = _audioManager.GetDefaultPlaybackDevice();
+
+            UpdateHeroDeviceCard();
 
             if (_settings.ConfiguredDevices.Count == 0)
             {
@@ -260,17 +419,18 @@ namespace AudioDeviceSwitcher
                      string.Equals(d.FullName, conf.FullName, StringComparison.OrdinalIgnoreCase)));
 
                 bool isActive = activeMatch != null;
+                bool isDefault = activeMatch != null && currentDefault != null && activeMatch.Id == currentDefault.Id;
                 Guid effectiveId = activeMatch?.Id ?? conf.Id;
                 string fullName = !string.IsNullOrWhiteSpace(activeMatch?.FullName) ? activeMatch.FullName : conf.FullName;
                 string interfaceName = !string.IsNullOrWhiteSpace(activeMatch?.InterfaceName) ? activeMatch.InterfaceName : conf.InterfaceName;
                 string name = !string.IsNullOrWhiteSpace(activeMatch?.Name) ? activeMatch.Name : conf.Name;
 
-                var card = CreateDeviceCard(effectiveId, fullName, interfaceName, name, isActive, conf, i, totalCount);
+                var card = CreateDeviceCard(effectiveId, fullName, interfaceName, name, isActive, isDefault, activeMatch, conf, i, totalCount);
                 DevicesContainer.Children.Add(card);
             }
         }
 
-        private UIElement CreateDeviceCard(Guid id, string fullName, string interfaceName, string name, bool isActive, ConfiguredDevice? conf, int index, int totalCount)
+        private UIElement CreateDeviceCard(Guid id, string fullName, string interfaceName, string name, bool isActive, bool isDefault, CoreAudioDevice? activeDevice, ConfiguredDevice? conf, int index, int totalCount)
         {
             var border = new Border
             {
@@ -391,16 +551,14 @@ namespace AudioDeviceSwitcher
             grid.Children.Add(reorderStack);
 
             // 1. Device Icon
-            bool isHeadphone = fullName.Contains("head", StringComparison.OrdinalIgnoreCase) ||
-                               fullName.Contains("ear", StringComparison.OrdinalIgnoreCase) ||
-                               fullName.Contains("phone", StringComparison.OrdinalIgnoreCase);
-
             var icon = new FontIcon
             {
-                Glyph = isHeadphone ? "\uE7F6" : "\uE7F5",
+                Glyph = GetDeviceGlyph(fullName),
                 FontSize = 20,
                 VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"]
+                Foreground = isDefault
+                    ? (Brush)Application.Current.Resources["SystemAccentColorBrush"]
+                    : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"]
             };
             Grid.SetColumn(icon, 1);
             grid.Children.Add(icon);
@@ -412,22 +570,48 @@ namespace AudioDeviceSwitcher
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            var titleRow = new StackPanel
+            var titleRow = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8
+                ColumnSpacing = 8
             };
+            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             string displayName = !string.IsNullOrWhiteSpace(fullName) ? fullName : (!string.IsNullOrWhiteSpace(name) ? name : "Audio Device");
             var nameText = new TextBlock
             {
                 Text = displayName,
                 Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"],
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxLines = 1,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            Grid.SetColumn(nameText, 0);
             titleRow.Children.Add(nameText);
 
-            if (!isActive)
+            if (isDefault)
+            {
+                var activeBadge = new Border
+                {
+                    Background = new SolidColorBrush(Windows.UI.Color.FromArgb(35, 108, 203, 95)),
+                    BorderBrush = new SolidColorBrush(Windows.UI.Color.FromArgb(110, 108, 203, 95)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(6, 1, 6, 1),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock
+                    {
+                        Text = "Active",
+                        FontSize = 10.5,
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = (Brush)Application.Current.Resources["ActiveStatusBrush"],
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                };
+                Grid.SetColumn(activeBadge, 1);
+                titleRow.Children.Add(activeBadge);
+            }
+            else if (!isActive)
             {
                 var disconnectedBadge = new Border
                 {
@@ -458,6 +642,7 @@ namespace AudioDeviceSwitcher
                     VerticalAlignment = VerticalAlignment.Center
                 });
                 disconnectedBadge.Child = badgeContent;
+                Grid.SetColumn(disconnectedBadge, 1);
                 titleRow.Children.Add(disconnectedBadge);
             }
 
@@ -467,20 +652,63 @@ namespace AudioDeviceSwitcher
             {
                 Text = !string.IsNullOrWhiteSpace(interfaceName) ? interfaceName : "Audio Endpoint",
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxLines = 1
             };
             infoStack.Children.Add(descText);
 
             Grid.SetColumn(infoStack, 2);
             grid.Children.Add(infoStack);
 
-            // 3. Right Controls: Quick Switch toggle + Mixer toggle + Label text box
+            // 3. Right Controls: Optional Set Default / Remove + Quick Switch toggle + Mixer toggle + Label text box
             var controlsStack = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 16,
+                Spacing = 14,
                 VerticalAlignment = VerticalAlignment.Center
             };
+
+            if (isActive && !isDefault && activeDevice != null)
+            {
+                var setDefaultBtn = new Button
+                {
+                    Content = "Set default",
+                    FontSize = 11.5,
+                    Padding = new Thickness(10, 4, 10, 5),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                setDefaultBtn.Click += (s, e) =>
+                {
+                    activeDevice.SetAsDefault();
+                    App.CurrentApp.UpdateTrayState();
+                    ReloadDevices();
+                    App.CurrentApp.ShowOsd("Audio playback switched", activeDevice.FullName, GetDeviceGlyph(activeDevice.FullName));
+                };
+                controlsStack.Children.Add(setDefaultBtn);
+            }
+            else if (!isActive)
+            {
+                var removeBtn = new Button
+                {
+                    Content = new FontIcon { Glyph = "\uE74D", FontSize = 13 },
+                    Padding = new Thickness(8, 6, 8, 6),
+                    Background = new SolidColorBrush(Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    CornerRadius = new CornerRadius(4),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                ToolTipService.SetToolTip(removeBtn, "Remove disconnected device");
+                removeBtn.Click += (s, e) =>
+                {
+                    if (_settings.RemoveDevice(id, fullName))
+                    {
+                        ReloadDevices();
+                        App.CurrentApp.UpdateTrayState();
+                    }
+                };
+                controlsStack.Children.Add(removeBtn);
+            }
 
             // Quick Switch Toggle
             bool isQuickSwitch = conf?.QuickSwitch ?? _settings.SelectedDeviceIds.Contains(id);
@@ -517,8 +745,8 @@ namespace AudioDeviceSwitcher
             var lblBox = new TextBox
             {
                 Text = curLabel,
-                Width = 72,
-                MaxLength = 4,
+                Width = 76,
+                MaxLength = 6,
                 PlaceholderText = $"AUX {index + 1}"
             };
             lblStack.Children.Add(lblBox);
