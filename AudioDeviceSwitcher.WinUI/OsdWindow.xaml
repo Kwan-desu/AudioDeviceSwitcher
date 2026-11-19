@@ -6,12 +6,17 @@
     Title="OSD">
 
     <Grid x:Name="RootGrid" Background="Transparent" Opacity="1">
-        <!-- Rounded HUD Container: 8px corner radius, NO border, perfectly flush to window edges -->
+        <Grid.RenderTransform>
+            <TranslateTransform x:Name="RootTranslate" Y="0" />
+        </Grid.RenderTransform>
+
+        <!-- Rounded Fluent 2 HUD Container with crisp hairline stroke -->
         <Border x:Name="ContainerBorder"
                 CornerRadius="8"
-                BorderThickness="0"
+                BorderThickness="1"
+                BorderBrush="{ThemeResource FlyoutSurfaceStrokeBrush}"
                 Background="{ThemeResource AcrylicFlyoutFillColorBrush}">
-            <Grid Padding="14,8,14,8" VerticalAlignment="Center">
+            <Grid Padding="14,10,14,10" VerticalAlignment="Center">
                 <!-- Volume Adjustment Mode -->
                 <Grid x:Name="VolumeModeGrid" Visibility="Visible">
                     <Grid.RowDefinitions>
@@ -19,15 +24,14 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                    <Grid Grid.Row="0" Margin="0,0,0,7">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <!-- Clean Fluent volume glyph -->
-                        <FontIcon x:Name="VolumeGlyphIcon" Glyph="&#xE995;" FontSize="15"
+                        <FontIcon x:Name="VolumeGlyphIcon" Glyph="&#xE995;" FontSize="15.5"
                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                   VerticalAlignment="Center" Margin="0,0,10,0" />
 
@@ -42,6 +46,8 @@
 
                         <TextBlock x:Name="VolumePercentText" Text="50%"
                                    Grid.Column="2"
+                                   MinWidth="42"
+                                   TextAlignment="Right"
                                    FontSize="12.5"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -49,10 +55,10 @@
                                    VerticalAlignment="Center" />
                     </Grid>
 
-                    <ProgressBar x:Name="VolumeProgressBar" Grid.Row="1" Height="3" CornerRadius="1.5"
+                    <ProgressBar x:Name="VolumeProgressBar" Grid.Row="1" Height="4" CornerRadius="2"
                                  Minimum="0" Maximum="100" Value="50"
                                  Foreground="{ThemeResource SystemAccentColorBrush}"
-                                 Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}" />
+                                 Background="{ThemeResource PeakMeterTrackBrush}" />
                 </Grid>
 
                 <!-- Device Switched / Status Notification Mode -->
@@ -62,16 +68,23 @@
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
-                    <FontIcon x:Name="SwitchGlyphIcon" Glyph="&#xE7F6;" FontSize="18"
-                              Foreground="{ThemeResource SystemAccentColorBrush}"
-                              VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <Border Width="34" Height="34"
+                            CornerRadius="8"
+                            Background="{ThemeResource LayerOnMicaBaseAltFillColorDefaultBrush}"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center">
+                        <FontIcon x:Name="SwitchGlyphIcon" Glyph="&#xE7F6;" FontSize="17"
+                                  Foreground="{ThemeResource SystemAccentColorBrush}"
+                                  HorizontalAlignment="Center"
+                                  VerticalAlignment="Center" />
+                    </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                         <TextBlock x:Name="SwitchTitleText" Text="Audio playback switched"
-                                   FontSize="10.5"
+                                   FontSize="11"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBlock x:Name="SwitchDeviceNameText" Text="Headphones"
-                                   FontSize="12.5"
+                                   FontSize="13"
                                    FontWeight="SemiBold"
                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis"

@@ -29,19 +29,34 @@
                     <Color x:Key="TextFillColorSecondary">#9E000000</Color>
                     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{StaticResource TextFillColorSecondary}" />
 
-                    <Color x:Key="CardStrokeColorDefault">#0F000000</Color>
+                    <Color x:Key="CardStrokeColorDefault">#14000000</Color>
                     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{StaticResource CardStrokeColorDefault}" />
 
-                    <Color x:Key="AcrylicFlyoutFillColor">#D9F9F9F9</Color>
+                    <Color x:Key="FlyoutSurfaceStrokeColor">#1F000000</Color>
+                    <SolidColorBrush x:Key="FlyoutSurfaceStrokeBrush" Color="{StaticResource FlyoutSurfaceStrokeColor}" />
+
+                    <Color x:Key="CardBackgroundHoverColor">#0D000000</Color>
+                    <SolidColorBrush x:Key="CardBackgroundHoverBrush" Color="{StaticResource CardBackgroundHoverColor}" />
+
+                    <Color x:Key="MutedStatusColor">#C42B1C</Color>
+                    <SolidColorBrush x:Key="MutedStatusBrush" Color="{StaticResource MutedStatusColor}" />
+
+                    <Color x:Key="ActiveStatusColor">#0F7B0F</Color>
+                    <SolidColorBrush x:Key="ActiveStatusBrush" Color="{StaticResource ActiveStatusColor}" />
+
+                    <Color x:Key="PeakMeterTrackColor">#14000000</Color>
+                    <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{StaticResource PeakMeterTrackColor}" />
+
+                    <Color x:Key="AcrylicFlyoutFillColor">#E2F9F9F9</Color>
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{StaticResource AcrylicFlyoutFillColor}" />
                 </ResourceDictionary>
 
                 <!-- ================= DARK THEME ================== -->
                 <ResourceDictionary x:Key="Dark">
-                    <Color x:Key="LayerFillColorDefault">#12FFFFFF</Color>
+                    <Color x:Key="LayerFillColorDefault">#0EFFFFFF</Color>
                     <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="{StaticResource LayerFillColorDefault}" />
 
-                    <Color x:Key="LayerOnMicaBaseAltFillColorDefault">#1AFFFFFF</Color>
+                    <Color x:Key="LayerOnMicaBaseAltFillColorDefault">#18FFFFFF</Color>
                     <SolidColorBrush x:Key="LayerOnMicaBaseAltFillColorDefaultBrush" Color="{StaticResource LayerOnMicaBaseAltFillColorDefault}" />
 
                     <Color x:Key="SolidBackgroundFillColorBase">#202020</Color>
@@ -53,10 +68,25 @@
                     <Color x:Key="TextFillColorSecondary">#C5FFFFFF</Color>
                     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{StaticResource TextFillColorSecondary}" />
 
-                    <Color x:Key="CardStrokeColorDefault">#17FFFFFF</Color>
+                    <Color x:Key="CardStrokeColorDefault">#16FFFFFF</Color>
                     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{StaticResource CardStrokeColorDefault}" />
 
-                    <Color x:Key="AcrylicFlyoutFillColor">#D9242424</Color>
+                    <Color x:Key="FlyoutSurfaceStrokeColor">#22FFFFFF</Color>
+                    <SolidColorBrush x:Key="FlyoutSurfaceStrokeBrush" Color="{StaticResource FlyoutSurfaceStrokeColor}" />
+
+                    <Color x:Key="CardBackgroundHoverColor">#10FFFFFF</Color>
+                    <SolidColorBrush x:Key="CardBackgroundHoverBrush" Color="{StaticResource CardBackgroundHoverColor}" />
+
+                    <Color x:Key="MutedStatusColor">#FF6B6B</Color>
+                    <SolidColorBrush x:Key="MutedStatusBrush" Color="{StaticResource MutedStatusColor}" />
+
+                    <Color x:Key="ActiveStatusColor">#6CCB5F</Color>
+                    <SolidColorBrush x:Key="ActiveStatusBrush" Color="{StaticResource ActiveStatusColor}" />
+
+                    <Color x:Key="PeakMeterTrackColor">#14FFFFFF</Color>
+                    <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{StaticResource PeakMeterTrackColor}" />
+
+                    <Color x:Key="AcrylicFlyoutFillColor">#E0222222</Color>
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{StaticResource AcrylicFlyoutFillColor}" />
                 </ResourceDictionary>
 
@@ -68,6 +98,11 @@
                     <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
                     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="FlyoutSurfaceStrokeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="CardBackgroundHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="MutedStatusBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="ActiveStatusBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{ThemeResource SystemColorWindowColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>

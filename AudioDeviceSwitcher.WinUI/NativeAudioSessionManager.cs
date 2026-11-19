@@ -87,6 +87,15 @@ namespace AudioDeviceSwitcher
         [PreserveSig] int SetMute(bool bMute, ref Guid EventContext);
         [PreserveSig] int GetMute(out bool pbMute);
     }
+
+    [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IAudioMeterInformation
+    {
+        [PreserveSig] int GetPeakValue(out float pfPeak);
+        [PreserveSig] int GetMeteringChannelCount(out uint pnChannelCount);
+        [PreserveSig] int GetChannelsPeakValues(uint u32ChannelCount, [In] IntPtr afPeakValues);
+        [PreserveSig] int QueryHardwareSupport(out uint pdwHardwareSupportMask);
+    }
     #endregion
 
     /// <summary>
@@ -100,8 +109,10 @@ namespace AudioDeviceSwitcher
         public uint ProcessId { get; set; }
         public float Volume { get; set; } = 1.0f; // 0.0 to 1.0
         public bool IsMuted { get; set; }
+        public bool IsActive { get; set; }
 
         public List<ISimpleAudioVolume> VolumeControls { get; } = new();
+        public List<IAudioMeterInformation> MeterControls { get; } = new();
 
         public void SetVolume(float newVolume)
         {
@@ -130,12 +141,84 @@ namespace AudioDeviceSwitcher
                 catch { }
             }
         }
+
+        public float GetPeakLevel()
+        {
+            if (IsMuted || Volume <= 0.001f) return 0f;
+            float maxPeak = 0f;
+            foreach (var meter in MeterControls)
+            {
+                try
+                {
+                    if (meter.GetPeakValue(out float peak) == 0 && peak > maxPeak)
+                    {
+                        maxPeak = peak;
+                    }
+                }
+                catch { }
+            }
+            return Math.Clamp(maxPeak * Volume, 0f, 1f);
+        }
+
+        public bool RefreshState()
+        {
+            if (VolumeControls.Count == 0) return false;
+            try
+            {
+                if (VolumeControls[0].GetMasterVolume(out float vol) == 0 &&
+                    VolumeControls[0].GetMute(out bool muted) == 0)
+                {
+                    Volume = Math.Clamp(vol, 0f, 1f);
+                    IsMuted = muted;
+                    return true;
+                }
+            }
+            catch { }
+            return false;
+        }
     }
 
     public static class NativeAudioSessionManager
     {
         private static readonly Guid CLSID_MMDeviceEnumerator = new("BCDE0395-E52F-467C-8E3D-C4579291692E");
         private static readonly Guid IID_IAudioSessionManager2 = new("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F");
+        private static readonly Guid IID_IAudioMeterInformation = new("C02216F6-8C67-4B5B-9D00-D008E73E0064");
+
+        public static IAudioMeterInformation? GetDeviceMeter(string? targetDeviceId = null)
+        {
+            try
+            {
+                Type? comType = Type.GetTypeFromCLSID(CLSID_MMDeviceEnumerator);
+                if (comType == null) return null;
+
+                var enumerator = (IMMDeviceEnumerator?)Activator.CreateInstance(comType);
+                if (enumerator == null) return null;
+
+                IMMDevice? device = null;
+                if (!string.IsNullOrEmpty(targetDeviceId))
+                {
+                    int hr = enumerator.GetDevice(targetDeviceId, out device);
+                    if (hr != 0 || device == null)
+                    {
+                        enumerator.GetDefaultAudioEndpoint(0 /* eRender */, 0 /* eConsole */, out device);
+                    }
+                }
+                else
+                {
+                    enumerator.GetDefaultAudioEndpoint(0 /* eRender */, 0 /* eConsole */, out device);
+                }
+
+                if (device == null) return null;
+
+                Guid iidMeter = IID_IAudioMeterInformation;
+                int actHr = device.Activate(ref iidMeter, 1 /* CLSCTX_INPROC_SERVER */, IntPtr.Zero, out object meterObj);
+                return actHr == 0 ? meterObj as IAudioMeterInformation : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern uint QueryDosDevice(string lpDeviceName, StringBuilder lpTargetPath, int ucchMax);
@@ -357,12 +440,15 @@ namespace AudioDeviceSwitcher
                                 ExecutablePath = exePath,
                                 ProcessId = pid,
                                 Volume = vol,
-                                IsMuted = muted
+                                IsMuted = muted,
+                                IsActive = state == 1
                             };
                             groups[groupKey] = grp;
                         }
                         else
                         {
+                            if (state == 1) grp.IsActive = true;
+
                             // If this subsequent session has volume or path info and existing didn't, augment it
                             if (string.IsNullOrEmpty(grp.ExecutablePath) && !string.IsNullOrEmpty(exePath))
                             {
@@ -378,6 +464,11 @@ namespace AudioDeviceSwitcher
                         {
                             grp.VolumeControls.Add(vCtrl);
                         }
+
+                        if (sessionCtrl is IAudioMeterInformation mCtrl)
+                        {
+                            grp.MeterControls.Add(mCtrl);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -386,7 +477,13 @@ namespace AudioDeviceSwitcher
                 }
 
                 result.AddRange(groups.Values);
-                result.Sort((a, b) => string.Compare(a.AppName, b.AppName, StringComparison.CurrentCultureIgnoreCase));
+                result.Sort((a, b) =>
+                {
+                    int activeCmp = b.IsActive.CompareTo(a.IsActive);
+                    return activeCmp != 0
+                        ? activeCmp
+                        : string.Compare(a.AppName, b.AppName, StringComparison.CurrentCultureIgnoreCase);
+                });
             }
             catch (Exception ex)
             {
