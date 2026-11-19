@@ -10,7 +10,7 @@ namespace AudioDeviceSwitcherInstaller;
 
 static class Program
 {
-    private const string CurrentVersion = "1.6.3";
+    private const string CurrentVersion = "1.7.0";
 
     [STAThread]
     static void Main(string[] args)
