@@ -982,15 +982,16 @@ namespace AudioDeviceSwitcher
             Grid.SetRow(titleRow, 0);
             rightGrid.Children.Add(titleRow);
 
-            // Bottom row: Full-width Slider + 2px live peak meter bar
+            // Bottom row: Full-width Slider + subtle 2px live peak meter bar
             var sliderStack = new StackPanel { Spacing = 0 };
             var slider = new Slider
             {
                 Minimum = 0,
                 Maximum = 100,
                 Value = currentVolPercent,
-                Height = 26,
-                Margin = new Thickness(0, -1, 0, 0),
+                Height = 24,
+                IsThumbToolTipEnabled = false,
+                Margin = new Thickness(0, 2, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -1001,9 +1002,9 @@ namespace AudioDeviceSwitcher
                 Maximum = 100,
                 Value = 0,
                 CornerRadius = new CornerRadius(1),
-                Margin = new Thickness(4, -2, 4, 0),
-                Opacity = 0.8,
-                Foreground = (Brush)Application.Current.Resources["SystemAccentColorBrush"],
+                Margin = new Thickness(4, 1, 4, 0),
+                Opacity = 0.85,
+                Foreground = (Brush)Application.Current.Resources["PeakMeterFillBrush"],
                 Background = (Brush)Application.Current.Resources["PeakMeterTrackBrush"]
             };
 

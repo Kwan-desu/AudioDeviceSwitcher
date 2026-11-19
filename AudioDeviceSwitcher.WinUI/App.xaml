@@ -47,6 +47,9 @@
                     <Color x:Key="PeakMeterTrackColor">#14000000</Color>
                     <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{StaticResource PeakMeterTrackColor}" />
 
+                    <Color x:Key="PeakMeterFillColor">#38000000</Color>
+                    <SolidColorBrush x:Key="PeakMeterFillBrush" Color="{StaticResource PeakMeterFillColor}" />
+
                     <Color x:Key="AcrylicFlyoutFillColor">#E2F9F9F9</Color>
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{StaticResource AcrylicFlyoutFillColor}" />
                 </ResourceDictionary>
@@ -86,6 +89,9 @@
                     <Color x:Key="PeakMeterTrackColor">#14FFFFFF</Color>
                     <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{StaticResource PeakMeterTrackColor}" />
 
+                    <Color x:Key="PeakMeterFillColor">#4DFFFFFF</Color>
+                    <SolidColorBrush x:Key="PeakMeterFillBrush" Color="{StaticResource PeakMeterFillColor}" />
+
                     <Color x:Key="AcrylicFlyoutFillColor">#E0222222</Color>
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{StaticResource AcrylicFlyoutFillColor}" />
                 </ResourceDictionary>
@@ -103,6 +109,7 @@
                     <SolidColorBrush x:Key="MutedStatusBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="ActiveStatusBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="PeakMeterFillBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{ThemeResource SystemColorWindowColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
