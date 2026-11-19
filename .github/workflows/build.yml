@@ -21,15 +21,20 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Setup MSBuild (Visual Studio)
+        uses: microsoft/setup-msbuild@v2
+
       - name: Restore & Publish WinUI 3 App (win-x64)
         shell: pwsh
         run: |
-          dotnet publish AudioDeviceSwitcher.WinUI/AudioDeviceSwitcher.WinUI.csproj `
-            -c Release `
-            -r win-x64 `
-            -p:Platform=x64 `
-            --self-contained true `
-            -o publish/winui
+          $publishDir = (Join-Path $PWD "publish\winui") + "\"
+          msbuild AudioDeviceSwitcher.WinUI\AudioDeviceSwitcher.WinUI.csproj `
+            /t:Restore,Publish `
+            /p:Configuration=Release `
+            /p:Platform=x64 `
+            /p:RuntimeIdentifier=win-x64 `
+            /p:SelfContained=true `
+            /p:PublishDir="$publishDir"
 
       - name: Package WinUI payload zip
         shell: pwsh
