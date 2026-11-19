@@ -50,7 +50,28 @@
                     <Color x:Key="PeakMeterFillColor">#38000000</Color>
                     <SolidColorBrush x:Key="PeakMeterFillBrush" Color="{StaticResource PeakMeterFillColor}" />
 
-                    <Color x:Key="AcrylicFlyoutFillColor">#E2F9F9F9</Color>
+                    <Color x:Key="MixerCardFillColor">#80FFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerCardFillBrush" Color="{StaticResource MixerCardFillColor}" />
+
+                    <Color x:Key="MixerCardHoverFillColor">#B3FFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerCardHoverFillBrush" Color="{StaticResource MixerCardHoverFillColor}" />
+
+                    <Color x:Key="MixerCardStrokeColor">#12000000</Color>
+                    <SolidColorBrush x:Key="MixerCardStrokeBrush" Color="{StaticResource MixerCardStrokeColor}" />
+
+                    <Color x:Key="MixerBadgeFillColor">#0F000000</Color>
+                    <SolidColorBrush x:Key="MixerBadgeFillBrush" Color="{StaticResource MixerBadgeFillColor}" />
+
+                    <Color x:Key="SliderPeakOverlayColor">#58000000</Color>
+                    <SolidColorBrush x:Key="SliderPeakOverlayBrush" Color="{StaticResource SliderPeakOverlayColor}" />
+
+                    <Color x:Key="MixerThumbOuterColor">#FFFFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerThumbOuterBrush" Color="{StaticResource MixerThumbOuterColor}" />
+
+                    <Color x:Key="MixerThumbBorderColor">#26000000</Color>
+                    <SolidColorBrush x:Key="MixerThumbBorderBrush" Color="{StaticResource MixerThumbBorderColor}" />
+
+                    <Color x:Key="AcrylicFlyoutFillColor">#B8F4F4F4</Color>
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{StaticResource AcrylicFlyoutFillColor}" />
                 </ResourceDictionary>
 
@@ -74,7 +95,7 @@
                     <Color x:Key="CardStrokeColorDefault">#16FFFFFF</Color>
                     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{StaticResource CardStrokeColorDefault}" />
 
-                    <Color x:Key="FlyoutSurfaceStrokeColor">#22FFFFFF</Color>
+                    <Color x:Key="FlyoutSurfaceStrokeColor">#24FFFFFF</Color>
                     <SolidColorBrush x:Key="FlyoutSurfaceStrokeBrush" Color="{StaticResource FlyoutSurfaceStrokeColor}" />
 
                     <Color x:Key="CardBackgroundHoverColor">#10FFFFFF</Color>
@@ -92,7 +113,28 @@
                     <Color x:Key="PeakMeterFillColor">#4DFFFFFF</Color>
                     <SolidColorBrush x:Key="PeakMeterFillBrush" Color="{StaticResource PeakMeterFillColor}" />
 
-                    <Color x:Key="AcrylicFlyoutFillColor">#E0222222</Color>
+                    <Color x:Key="MixerCardFillColor">#0DFFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerCardFillBrush" Color="{StaticResource MixerCardFillColor}" />
+
+                    <Color x:Key="MixerCardHoverFillColor">#15FFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerCardHoverFillBrush" Color="{StaticResource MixerCardHoverFillColor}" />
+
+                    <Color x:Key="MixerCardStrokeColor">#14FFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerCardStrokeBrush" Color="{StaticResource MixerCardStrokeColor}" />
+
+                    <Color x:Key="MixerBadgeFillColor">#18FFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerBadgeFillBrush" Color="{StaticResource MixerBadgeFillColor}" />
+
+                    <Color x:Key="SliderPeakOverlayColor">#66FFFFFF</Color>
+                    <SolidColorBrush x:Key="SliderPeakOverlayBrush" Color="{StaticResource SliderPeakOverlayColor}" />
+
+                    <Color x:Key="MixerThumbOuterColor">#FF454545</Color>
+                    <SolidColorBrush x:Key="MixerThumbOuterBrush" Color="{StaticResource MixerThumbOuterColor}" />
+
+                    <Color x:Key="MixerThumbBorderColor">#1CFFFFFF</Color>
+                    <SolidColorBrush x:Key="MixerThumbBorderBrush" Color="{StaticResource MixerThumbBorderColor}" />
+
+                    <Color x:Key="AcrylicFlyoutFillColor">#B2202020</Color>
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{StaticResource AcrylicFlyoutFillColor}" />
                 </ResourceDictionary>
 
@@ -110,6 +152,13 @@
                     <SolidColorBrush x:Key="ActiveStatusBrush" Color="{ThemeResource SystemColorHighlightColor}" />
                     <SolidColorBrush x:Key="PeakMeterTrackBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
                     <SolidColorBrush x:Key="PeakMeterFillBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="MixerCardFillBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="MixerCardHoverFillBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="MixerCardStrokeBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="MixerBadgeFillBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="SliderPeakOverlayBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="MixerThumbOuterBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="MixerThumbBorderBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
                     <SolidColorBrush x:Key="AcrylicFlyoutFillColorBrush" Color="{ThemeResource SystemColorWindowColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>

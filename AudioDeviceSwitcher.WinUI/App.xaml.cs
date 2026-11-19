@@ -115,13 +115,17 @@ namespace AudioDeviceSwitcher
                     _dispatcherQueue.TryEnqueue(UpdateTrayState);
                 }, null, 1000, 1000);
 
-                if (Settings.RunAtStartup)
+                string[] cmdArgs = Environment.GetCommandLineArgs();
+                bool openMixer = cmdArgs.Any(a => a.Equals("--mixer", StringComparison.OrdinalIgnoreCase) ||
+                                                  a.Equals("/mixer", StringComparison.OrdinalIgnoreCase));
+
+                if (Settings.RunAtStartup && !openMixer)
                 {
                     StartupManager.UpdateStartup(true);
                 }
 
-                string[] cmdArgs = Environment.GetCommandLineArgs();
-                bool startMinimized = cmdArgs.Any(a => a.Equals("--startup", StringComparison.OrdinalIgnoreCase) ||
+                bool startMinimized = openMixer ||
+                                      cmdArgs.Any(a => a.Equals("--startup", StringComparison.OrdinalIgnoreCase) ||
                                                        a.Equals("--minimized", StringComparison.OrdinalIgnoreCase) ||
                                                        a.Equals("/startup", StringComparison.OrdinalIgnoreCase) ||
                                                        a.Equals("/minimized", StringComparison.OrdinalIgnoreCase)) ||
@@ -132,7 +136,7 @@ namespace AudioDeviceSwitcher
 
                 if (startMinimized)
                 {
-                    Log("Start minimized requested - keeping window hidden in tray.");
+                    Log("Start minimized requested - keeping SettingsWindow hidden in tray.");
                     appWindow?.Hide();
                 }
                 else
@@ -140,6 +144,12 @@ namespace AudioDeviceSwitcher
                     Log("Showing and activating SettingsWindow...");
                     appWindow?.Show();
                     CurrentSettingsWindow.Activate();
+                }
+
+                if (openMixer)
+                {
+                    Log("Opening Volume Mixer via --mixer flag...");
+                    _dispatcherQueue.TryEnqueue(ShowMixerWindow);
                 }
                 Log("OnLaunched() finished successfully.");
             }

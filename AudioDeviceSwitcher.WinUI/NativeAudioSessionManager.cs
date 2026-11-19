@@ -106,6 +106,8 @@ namespace AudioDeviceSwitcher
     {
         public string AppName { get; set; } = "";
         public string ExecutablePath { get; set; } = "";
+        public string AppUserModelId { get; set; } = "";
+        public string IconPath { get; set; } = "";
         public uint ProcessId { get; set; }
         public float Volume { get; set; } = 1.0f; // 0.0 to 1.0
         public bool IsMuted { get; set; }
@@ -144,6 +146,11 @@ namespace AudioDeviceSwitcher
 
         public float GetPeakLevel()
         {
+            return Math.Clamp(GetRawPeakLevel() * Volume, 0f, 1f);
+        }
+
+        public float GetRawPeakLevel()
+        {
             if (IsMuted || Volume <= 0.001f) return 0f;
             float maxPeak = 0f;
             foreach (var meter in MeterControls)
@@ -157,7 +164,7 @@ namespace AudioDeviceSwitcher
                 }
                 catch { }
             }
-            return Math.Clamp(maxPeak * Volume, 0f, 1f);
+            return Math.Clamp(maxPeak, 0f, 1f);
         }
 
         public bool RefreshState()
@@ -261,6 +268,12 @@ namespace AudioDeviceSwitcher
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CloseHandle(IntPtr hObject);
 
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetApplicationUserModelId(
+            IntPtr hProcess,
+            ref uint applicationUserModelIdLength,
+            [Out] StringBuilder applicationUserModelId);
+
         private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
 
         private static string GetProcessPath(uint pid)
@@ -274,6 +287,35 @@ namespace AudioDeviceSwitcher
                 var sb = new StringBuilder(1024);
                 uint size = (uint)sb.Capacity;
                 if (QueryFullProcessImageName(hProcess, 0, sb, ref size))
+                {
+                    return sb.ToString();
+                }
+            }
+            catch { }
+            finally
+            {
+                CloseHandle(hProcess);
+            }
+            return "";
+        }
+
+        private static string GetProcessAumid(uint pid)
+        {
+            if (pid == 0) return "";
+            IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+            if (hProcess == IntPtr.Zero) return "";
+
+            try
+            {
+                uint length = 256;
+                var sb = new StringBuilder((int)length);
+                int rc = GetApplicationUserModelId(hProcess, ref length, sb);
+                if (rc == 122 /* ERROR_INSUFFICIENT_BUFFER */ && length > 0 && length <= 2048)
+                {
+                    sb = new StringBuilder((int)length);
+                    rc = GetApplicationUserModelId(hProcess, ref length, sb);
+                }
+                if (rc == 0)
                 {
                     return sb.ToString();
                 }
@@ -353,6 +395,7 @@ namespace AudioDeviceSwitcher
 
                         string appName = dispName;
                         string exePath = "";
+                        string aumid = pid > 0 ? GetProcessAumid(pid) : "";
 
                         // 1. Try extracting executable path from SessionIdentifier (often contains \Device\HarddiskVolume...\app.exe)
                         if (!string.IsNullOrEmpty(sessId) && sessId.Contains(@"\Device\"))
@@ -438,6 +481,8 @@ namespace AudioDeviceSwitcher
                             {
                                 AppName = appName,
                                 ExecutablePath = exePath,
+                                AppUserModelId = aumid,
+                                IconPath = iconPath ?? "",
                                 ProcessId = pid,
                                 Volume = vol,
                                 IsMuted = muted,
@@ -453,6 +498,14 @@ namespace AudioDeviceSwitcher
                             if (string.IsNullOrEmpty(grp.ExecutablePath) && !string.IsNullOrEmpty(exePath))
                             {
                                 grp.ExecutablePath = exePath;
+                            }
+                            if (string.IsNullOrEmpty(grp.AppUserModelId) && !string.IsNullOrEmpty(aumid))
+                            {
+                                grp.AppUserModelId = aumid;
+                            }
+                            if (string.IsNullOrEmpty(grp.IconPath) && !string.IsNullOrEmpty(iconPath))
+                            {
+                                grp.IconPath = iconPath;
                             }
                             if (grp.AppName.Equals("Application", StringComparison.OrdinalIgnoreCase) && !appName.Equals("Application", StringComparison.OrdinalIgnoreCase))
                             {

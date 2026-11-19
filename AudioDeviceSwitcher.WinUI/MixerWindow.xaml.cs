@@ -1,37 +1,42 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using Windows.Storage.Streams;
+using Windows.Foundation;
 using Windows.System;
-using AudioSwitcher.AudioApi;
+using Windows.UI.ViewManagement;
 using AudioSwitcher.AudioApi.CoreAudio;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
 
 namespace AudioDeviceSwitcher
 {
     public sealed partial class MixerWindow : Window
     {
+        private const int MixerWidthDips = 424;
+
         private sealed class AppRowState
         {
             public required AudioSessionGroup Group { get; init; }
-            public required Slider Slider { get; init; }
-            public required ProgressBar PeakBar { get; init; }
+            public required Border RowBorder { get; init; }
+            public required PeakSlider Slider { get; init; }
             public required TextBlock PercentText { get; init; }
             public required Button IconBtn { get; init; }
             public required UIElement IconVisual { get; init; }
+            public FontIcon? IconFallbackGlyph { get; init; }
             public required Border MuteBadge { get; init; }
+            public required FontIcon MuteBadgeIcon { get; init; }
+            public required TextBlock AppTitleText { get; init; }
             public required Ellipse ActiveDot { get; init; }
             public bool IsDragging { get; set; }
             public double SmoothedPeak { get; set; }
@@ -39,7 +44,6 @@ namespace AudioDeviceSwitcher
 
         private readonly AudioDeviceManager _audioManager;
         private readonly AppSettings _settings;
-        private static readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
 
         private readonly List<AppRowState> _appRows = new();
         private IAudioMeterInformation? _masterMeter;
@@ -139,6 +143,9 @@ namespace AudioDeviceSwitcher
             MasterVolumeSlider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(MasterVolumeSlider_PointerReleased), true);
             MasterVolumeSlider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(MasterVolumeSlider_PointerCaptureLost), true);
 
+            RootGrid.Loaded += (s, e) => ResizeWindowToFitContent();
+            RootGrid.ActualThemeChanged += (s, e) => RefreshThemeVisuals();
+
             ReloadDevices();
 
             MasterVolumeSlider.ValueChanged += MasterVolumeSlider_ValueChanged;
@@ -150,6 +157,102 @@ namespace AudioDeviceSwitcher
 
             StartLiveTimer();
             PlayEntranceAnimation();
+        }
+
+        private string GetActiveThemeKey()
+        {
+            try
+            {
+                if (new AccessibilitySettings().HighContrast)
+                    return "HighContrast";
+            }
+            catch { }
+
+            return RootGrid.ActualTheme switch
+            {
+                ElementTheme.Light => "Light",
+                ElementTheme.Dark => "Dark",
+                _ => Application.Current.RequestedTheme == ApplicationTheme.Dark ? "Dark" : "Light"
+            };
+        }
+
+        private Brush GetThemeBrush(string key)
+        {
+            string themeKey = GetActiveThemeKey();
+
+            if (TryLookupThemeBrush(Application.Current.Resources, themeKey, key, out var appBrush))
+                return appBrush!;
+
+            foreach (var merged in Application.Current.Resources.MergedDictionaries)
+            {
+                if (TryLookupThemeBrush(merged, themeKey, key, out var mergedBrush))
+                    return mergedBrush!;
+            }
+
+            if (Application.Current.Resources.TryGetValue(key, out var directObj) && directObj is Brush directBrush)
+                return directBrush;
+
+            return new SolidColorBrush(Colors.Transparent);
+        }
+
+        private static bool TryLookupThemeBrush(ResourceDictionary dict, string themeKey, string key, out Brush? brush)
+        {
+            brush = null;
+            if (dict.ThemeDictionaries.TryGetValue(themeKey, out var tdObj) && tdObj is ResourceDictionary themeDict)
+            {
+                if (themeDict.TryGetValue(key, out var valObj) && valObj is Brush b)
+                {
+                    brush = b;
+                    return true;
+                }
+            }
+            if (themeKey == "Dark" &&
+                dict.ThemeDictionaries.TryGetValue("Default", out var defObj) &&
+                defObj is ResourceDictionary defDict)
+            {
+                if (defDict.TryGetValue(key, out var valObj) && valObj is Brush b)
+                {
+                    brush = b;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private void RefreshThemeVisuals()
+        {
+            if (_isClosed) return;
+
+            ApplyDwmThemeAttributes();
+
+            var dev = _audioManager.GetDefaultPlaybackDevice();
+            if (dev != null)
+            {
+                UpdateMasterVisuals(MasterVolumeSlider.Value, dev.IsMuted);
+            }
+
+            var cardBrush = GetThemeBrush("MixerCardFillBrush");
+            var strokeBrush = GetThemeBrush("MixerCardStrokeBrush");
+            var primaryTextBrush = GetThemeBrush("TextFillColorPrimaryBrush");
+            var activeDotBrush = GetThemeBrush("ActiveStatusBrush");
+            var badgeBg = GetThemeBrush("MixerThumbOuterBrush");
+            var badgeStroke = GetThemeBrush("MixerThumbBorderBrush");
+
+            foreach (var row in _appRows)
+            {
+                row.RowBorder.Background = cardBrush;
+                row.RowBorder.BorderBrush = strokeBrush;
+                row.AppTitleText.Foreground = primaryTextBrush;
+                row.ActiveDot.Fill = activeDotBrush;
+                row.MuteBadge.Background = badgeBg;
+                row.MuteBadge.BorderBrush = badgeStroke;
+                row.MuteBadgeIcon.Foreground = primaryTextBrush;
+                if (row.IconFallbackGlyph != null)
+                {
+                    row.IconFallbackGlyph.Foreground = primaryTextBrush;
+                }
+                UpdateAppRowVisuals(row, (int)Math.Round(row.Slider.Value), row.Group.IsMuted);
+            }
         }
 
         private void PlayEntranceAnimation()
@@ -233,7 +336,7 @@ namespace AudioDeviceSwitcher
                         {
                             if (_masterMeter.GetPeakValue(out float p) == 0)
                             {
-                                rawMasterPeak = Math.Clamp(p * dev.Volume, 0, 100);
+                                rawMasterPeak = Math.Clamp(p * 100.0, 0, 100);
                             }
                         }
                         catch { }
@@ -244,7 +347,7 @@ namespace AudioDeviceSwitcher
                         ? rawMasterPeak
                         : _smoothedMasterPeak * 0.72;
                     if (_smoothedMasterPeak < 0.5) _smoothedMasterPeak = 0;
-                    MasterPeakBar.Value = _smoothedMasterPeak;
+                    MasterVolumeSlider.PeakLevel = _smoothedMasterPeak;
                 }
 
                 // 2. Update App Peak Meters & sync external app volume/mute changes
@@ -262,13 +365,13 @@ namespace AudioDeviceSwitcher
                         UpdateAppRowVisuals(row, externalVol, row.Group.IsMuted);
                     }
 
-                    double rawPeak = row.Group.GetPeakLevel() * 100.0;
+                    double rawPeak = row.Group.GetRawPeakLevel() * 100.0;
                     row.SmoothedPeak = rawPeak > row.SmoothedPeak
                         ? rawPeak
                         : row.SmoothedPeak * 0.72;
                     if (row.SmoothedPeak < 0.5) row.SmoothedPeak = 0;
 
-                    row.PeakBar.Value = row.SmoothedPeak;
+                    row.Slider.PeakLevel = row.SmoothedPeak;
                     row.ActiveDot.Visibility = (!row.Group.IsMuted && row.SmoothedPeak > 1.5)
                         ? Visibility.Visible
                         : Visibility.Collapsed;
@@ -310,6 +413,11 @@ namespace AudioDeviceSwitcher
                 e.Handled = true;
                 Close();
             }
+            else if (e.Key == VirtualKey.F5)
+            {
+                e.Handled = true;
+                ReloadDevices();
+            }
         }
 
         private void ConfigureWindow()
@@ -329,7 +437,7 @@ namespace AudioDeviceSwitcher
                     presenter.SetBorderAndTitleBar(false, false);
                 }
 
-                appWindow.IsShownInSwitchers = false;
+                try { appWindow.IsShownInSwitchers = false; } catch { }
                 PositionNearTray(appWindow, hWnd);
             }
 
@@ -342,26 +450,36 @@ namespace AudioDeviceSwitcher
             }
             catch { }
 
-            // DWM Dark Mode & Native Hardware Anti-Aliased Window Rounding
+            string theme = _settings?.Theme ?? "System";
+            if (Content is FrameworkElement root)
+            {
+                root.RequestedTheme = theme switch
+                {
+                    "Light" => ElementTheme.Light,
+                    "Dark" => ElementTheme.Dark,
+                    _ => ElementTheme.Default
+                };
+            }
+
+            ApplyDwmThemeAttributes();
+
             try
             {
-                string theme = _settings?.Theme ?? "System";
-                if (Content is FrameworkElement root)
-                {
-                    root.RequestedTheme = theme switch
-                    {
-                        "Light" => ElementTheme.Light,
-                        "Dark" => ElementTheme.Dark,
-                        _ => ElementTheme.Default
-                    };
-                }
+                _subclassProc = MixerSubclassProc;
+                SetWindowSubclass(hWnd, _subclassProc, new UIntPtr(2001), UIntPtr.Zero);
+            }
+            catch (Exception ex)
+            {
+                App.Log($"[MixerWindow] SetWindowSubclass failed: {ex.Message}");
+            }
+        }
 
-                bool isDark = theme switch
-                {
-                    "Dark" => true,
-                    "Light" => false,
-                    _ => Application.Current.RequestedTheme == ApplicationTheme.Dark
-                };
+        private void ApplyDwmThemeAttributes()
+        {
+            try
+            {
+                var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                bool isDark = GetActiveThemeKey() == "Dark";
 
                 int darkVal = isDark ? 1 : 0;
                 DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkVal, sizeof(int));
@@ -383,16 +501,6 @@ namespace AudioDeviceSwitcher
             catch (Exception ex)
             {
                 App.Log($"[MixerWindow] Configure DWM failed: {ex.Message}");
-            }
-
-            try
-            {
-                _subclassProc = MixerSubclassProc;
-                SetWindowSubclass(hWnd, _subclassProc, new UIntPtr(2001), UIntPtr.Zero);
-            }
-            catch (Exception ex)
-            {
-                App.Log($"[MixerWindow] SetWindowSubclass failed: {ex.Message}");
             }
         }
 
@@ -425,14 +533,44 @@ namespace AudioDeviceSwitcher
             catch { }
         }
 
+        private void ResizeWindowToFitContent()
+        {
+            if (_isClosed) return;
+
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
+            var appWindow = AppWindow.GetFromWindowId(windowId);
+            if (appWindow == null) return;
+
+            RootGrid.UpdateLayout();
+            RootGrid.Measure(new Size(MixerWidthDips, double.PositiveInfinity));
+            double measuredHeight = RootGrid.DesiredSize.Height;
+
+            int desiredDips;
+            if (measuredHeight >= 120 && !double.IsInfinity(measuredHeight) && !double.IsNaN(measuredHeight))
+            {
+                desiredDips = (int)Math.Ceiling(measuredHeight) + 2;
+            }
+            else
+            {
+                int appCount = AppSessionsContainer.Children.Count;
+                desiredDips = appCount == 0
+                    ? 320
+                    : 230 + (appCount * 58) + ((appCount - 1) * 4) + 6;
+            }
+
+            desiredDips = Math.Clamp(desiredDips, 260, 640);
+            PositionNearTray(appWindow, hWnd, desiredDips);
+        }
+
         private void PositionNearTray(AppWindow appWindow, IntPtr hWnd, int? desiredHeightDips = null)
         {
             uint dpi = GetDpiForWindow(hWnd);
             double scale = (dpi > 0 ? dpi : 96) / 96.0;
 
-            int winWidth = (int)(396 * scale);
+            int winWidth = (int)Math.Round(MixerWidthDips * scale);
             int dips = desiredHeightDips ?? 360;
-            int winHeight = (int)(dips * scale);
+            int winHeight = (int)Math.Round(dips * scale);
 
             GetCursorPos(out POINT pt);
             IntPtr hMon = MonitorFromPoint(pt, 2 /* MONITOR_DEFAULTTONEAREST */);
@@ -444,10 +582,10 @@ namespace AudioDeviceSwitcher
                 int workBottom = mi.rcWork.Bottom;
                 int workHeight = mi.rcWork.Bottom - mi.rcWork.Top;
 
-                winHeight = Math.Min(winHeight, workHeight - (int)(30 * scale));
+                winHeight = Math.Min(winHeight, workHeight - (int)Math.Round(30 * scale));
 
-                int posX = workRight - winWidth - (int)(12 * scale);
-                int posY = workBottom - winHeight - (int)(12 * scale);
+                int posX = workRight - winWidth - (int)Math.Round(12 * scale);
+                int posY = workBottom - winHeight - (int)Math.Round(12 * scale);
 
                 appWindow.MoveAndResize(new Windows.Graphics.RectInt32(posX, posY, winWidth, winHeight));
             }
@@ -479,7 +617,8 @@ namespace AudioDeviceSwitcher
 
         private static string GetVolumeGlyph(double volume, bool isMuted)
         {
-            if (isMuted || volume <= 0.5) return "\uE74F";
+            if (isMuted) return "\uE74F";
+            if (volume <= 0.5) return "\uE992";
             if (volume <= 33) return "\uE993";
             if (volume <= 66) return "\uE994";
             return "\uE995";
@@ -487,20 +626,29 @@ namespace AudioDeviceSwitcher
 
         private void UpdateMasterVisuals(double volume, bool isMuted)
         {
-            MasterMuteIcon.Glyph = GetVolumeGlyph(volume, isMuted);
+            int volInt = (int)Math.Round(volume);
+            string glyph = GetVolumeGlyph(volume, isMuted);
+            MasterMuteIcon.Glyph = glyph;
+            // Optical horizontal centering for left-weighted speaker-0 / speaker-1 glyphs
+            MasterMuteIcon.Margin = glyph is "\uE992" or "\uE993"
+                ? new Thickness(3, 0, 0, 0)
+                : (glyph == "\uE994" ? new Thickness(1, 0, 0, 0) : new Thickness(0));
             MasterMuteIcon.Foreground = isMuted
-                ? (Brush)Application.Current.Resources["MutedStatusBrush"]
-                : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+                ? GetThemeBrush("TextFillColorSecondaryBrush")
+                : GetThemeBrush("TextFillColorPrimaryBrush");
 
             MasterVolumeSlider.Opacity = isMuted ? 0.45 : 1.0;
 
-            MasterVolumePercentText.Text = isMuted ? "Muted" : $"{(int)Math.Round(volume)}%";
+            MasterVolumePercentText.Text = $"{volInt}%";
             MasterVolumePercentText.Foreground = isMuted
-                ? (Brush)Application.Current.Resources["MutedStatusBrush"]
-                : (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"];
+                ? GetThemeBrush("TextFillColorSecondaryBrush")
+                : GetThemeBrush("TextFillColorPrimaryBrush");
+            MasterVolumePercentText.Opacity = isMuted ? 0.55 : 1.0;
 
+            string muteLabel = isMuted ? "Unmute master volume" : "Mute master volume";
+            AutomationProperties.SetName(MasterMuteButton, muteLabel);
             ToolTipService.SetToolTip(MasterMuteButton, isMuted ? "Unmute" : "Mute");
-            ToolTipService.SetToolTip(MasterVolumeSlider, isMuted ? "Muted" : $"{(int)Math.Round(volume)}%");
+            ToolTipService.SetToolTip(MasterVolumeSlider, isMuted ? $"{volInt}% (Muted)" : $"{volInt}%");
         }
 
         private void MasterVolumeSlider_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -565,7 +713,7 @@ namespace AudioDeviceSwitcher
             DeviceListContainer.Children.Clear();
             _appRows.Clear();
             _smoothedMasterPeak = 0;
-            MasterPeakBar.Value = 0;
+            MasterVolumeSlider.PeakLevel = 0;
 
             var activeDevices = _audioManager.GetActivePlaybackDevices();
             var currentDefault = _audioManager.GetDefaultPlaybackDevice();
@@ -587,6 +735,7 @@ namespace AudioDeviceSwitcher
                     MasterDeviceLabelBadge.Visibility = Visibility.Collapsed;
                 }
 
+                AutomationProperties.SetName(DeviceSelectorButton, $"Output audio device: {currentDefault.FullName}");
                 ToolTipService.SetToolTip(DeviceSelectorButton, $"Output: {currentDefault.FullName} (Click to switch)");
 
                 MasterVolumeSlider.Value = currentDefault.Volume;
@@ -605,7 +754,7 @@ namespace AudioDeviceSwitcher
                         HorizontalContentAlignment = HorizontalAlignment.Stretch,
                         Padding = new Thickness(8, 8, 10, 8),
                         Background = isCur
-                            ? (Brush)Application.Current.Resources["SubtleFillColorSecondaryBrush"]
+                            ? GetThemeBrush("SubtleFillColorSecondaryBrush")
                             : new SolidColorBrush(Colors.Transparent),
                         BorderThickness = new Thickness(0),
                         CornerRadius = new CornerRadius(5)
@@ -624,7 +773,7 @@ namespace AudioDeviceSwitcher
                         Height = 16,
                         CornerRadius = new CornerRadius(1.5),
                         Background = isCur
-                            ? (Brush)Application.Current.Resources["SystemAccentColorBrush"]
+                            ? GetThemeBrush("AccentFillColorDefaultBrush")
                             : new SolidColorBrush(Colors.Transparent),
                         VerticalAlignment = VerticalAlignment.Center
                     };
@@ -636,8 +785,8 @@ namespace AudioDeviceSwitcher
                         Glyph = GetDeviceGlyph(dev.FullName),
                         FontSize = 14.5,
                         Foreground = isCur
-                            ? (Brush)Application.Current.Resources["SystemAccentColorBrush"]
-                            : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                            ? GetThemeBrush("AccentTextFillColorPrimaryBrush")
+                            : GetThemeBrush("TextFillColorSecondaryBrush"),
                         VerticalAlignment = VerticalAlignment.Center
                     };
                     Grid.SetColumn(itemIcon, 1);
@@ -653,7 +802,7 @@ namespace AudioDeviceSwitcher
                         Text = dev.FullName,
                         FontSize = 12.5,
                         FontWeight = isCur ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal,
-                        Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
+                        Foreground = GetThemeBrush("TextFillColorPrimaryBrush"),
                         TextTrimming = TextTrimming.CharacterEllipsis,
                         MaxLines = 1,
                         VerticalAlignment = VerticalAlignment.Center
@@ -669,7 +818,9 @@ namespace AudioDeviceSwitcher
                         {
                             CornerRadius = new CornerRadius(3),
                             Padding = new Thickness(5, 1, 5, 1),
-                            Background = (Brush)Application.Current.Resources["LayerOnMicaBaseAltFillColorDefaultBrush"],
+                            Background = GetThemeBrush("MixerBadgeFillBrush"),
+                            BorderBrush = GetThemeBrush("CardStrokeColorDefaultBrush"),
+                            BorderThickness = new Thickness(1),
                             VerticalAlignment = VerticalAlignment.Center
                         };
                         badge.Child = new TextBlock
@@ -677,7 +828,7 @@ namespace AudioDeviceSwitcher
                             Text = dLabel,
                             FontSize = 10,
                             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                            Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"]
+                            Foreground = GetThemeBrush("TextFillColorSecondaryBrush")
                         };
                         Grid.SetColumn(badge, 1);
                         nameGrid.Children.Add(badge);
@@ -693,15 +844,16 @@ namespace AudioDeviceSwitcher
                         Spacing = 6,
                         VerticalAlignment = VerticalAlignment.Center
                     };
-                    rightStack.Children.Add(new TextBlock
+                    var devVolText = new TextBlock
                     {
-                        Text = dev.IsMuted ? "Muted" : $"{(int)Math.Round(dev.Volume)}%",
+                        Text = $"{(int)Math.Round(dev.Volume)}%",
                         FontSize = 11,
-                        Foreground = dev.IsMuted
-                            ? (Brush)Application.Current.Resources["MutedStatusBrush"]
-                            : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                        Foreground = GetThemeBrush("TextFillColorSecondaryBrush"),
+                        Opacity = dev.IsMuted ? 0.55 : 1.0,
                         VerticalAlignment = VerticalAlignment.Center
-                    });
+                    };
+                    Typography.SetNumeralAlignment(devVolText, FontNumeralAlignment.Tabular);
+                    rightStack.Children.Add(devVolText);
 
                     if (isCur)
                     {
@@ -709,7 +861,7 @@ namespace AudioDeviceSwitcher
                         {
                             Glyph = "\uE73E",
                             FontSize = 11.5,
-                            Foreground = (Brush)Application.Current.Resources["SystemAccentColorBrush"],
+                            Foreground = GetThemeBrush("AccentTextFillColorPrimaryBrush"),
                             VerticalAlignment = VerticalAlignment.Center
                         });
                     }
@@ -749,21 +901,7 @@ namespace AudioDeviceSwitcher
             }
 
             _isUpdatingUi = false;
-
-            // Dynamically adjust window height near tray to avoid empty space / clipping
-            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-            var windowId = Win32Interop.GetWindowIdFromWindow(hWnd);
-            var appWindow = AppWindow.GetFromWindowId(windowId);
-            if (appWindow != null)
-            {
-                int appCount = AppSessionsContainer.Children.Count;
-                int baseHeight = 262;
-                int computedDips = appCount == 0
-                    ? baseHeight + 68
-                    : baseHeight + (appCount * 62) + 6;
-                computedDips = Math.Clamp(computedDips, 315, 570);
-                PositionNearTray(appWindow, hWnd, computedDips);
-            }
+            ResizeWindowToFitContent();
         }
 
         private void SetEmptyAppsState(bool isEmpty, string message = "No applications playing audio")
@@ -819,215 +957,210 @@ namespace AudioDeviceSwitcher
             }
         }
 
-        private static void UpdateAppRowVisuals(AppRowState row, int volPercent, bool isMuted)
+        private void UpdateAppRowVisuals(AppRowState row, int volPercent, bool isMuted)
         {
-            row.IconVisual.Opacity = isMuted ? 0.4 : 1.0;
+            row.IconVisual.Opacity = isMuted ? 0.45 : 1.0;
             row.MuteBadge.Visibility = isMuted ? Visibility.Visible : Visibility.Collapsed;
             row.Slider.Opacity = isMuted ? 0.45 : 1.0;
 
-            row.PercentText.Text = isMuted ? "Muted" : $"{volPercent}%";
+            row.PercentText.Text = $"{volPercent}%";
             row.PercentText.Foreground = isMuted
-                ? (Brush)Application.Current.Resources["MutedStatusBrush"]
-                : (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+                ? GetThemeBrush("TextFillColorSecondaryBrush")
+                : GetThemeBrush("TextFillColorPrimaryBrush");
+            row.PercentText.Opacity = isMuted ? 0.55 : 1.0;
 
+            string muteLabel = isMuted
+                ? $"Unmute {row.Group.AppName}"
+                : $"Mute {row.Group.AppName}";
+            AutomationProperties.SetName(row.IconBtn, muteLabel);
             ToolTipService.SetToolTip(row.IconBtn, isMuted
                 ? $"{row.Group.AppName} (Muted — click to unmute)"
                 : $"{row.Group.AppName} (Click to mute)");
-            ToolTipService.SetToolTip(row.Slider, isMuted ? "Muted" : $"{volPercent}%");
+            ToolTipService.SetToolTip(row.Slider, isMuted ? $"{volPercent}% (Muted)" : $"{volPercent}%");
         }
 
         private UIElement CreateAppRow(AudioSessionGroup appGroup)
         {
-            var transparentBrush = new SolidColorBrush(Colors.Transparent);
+            var cardBrush = GetThemeBrush("MixerCardFillBrush");
+            var strokeBrush = GetThemeBrush("MixerCardStrokeBrush");
+            var primaryTextBrush = GetThemeBrush("TextFillColorPrimaryBrush");
 
             var rowContainer = new Border
             {
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(8, 7, 8, 6),
-                Background = transparentBrush
+                CornerRadius = new CornerRadius(8),
+                BorderThickness = new Thickness(1),
+                BorderBrush = strokeBrush,
+                Padding = new Thickness(12, 8, 12, 5),
+                Background = cardBrush
             };
 
-            rowContainer.PointerEntered += (s, e) =>
-            {
-                rowContainer.Background = (Brush)Application.Current.Resources["CardBackgroundHoverBrush"];
-            };
-            rowContainer.PointerExited += (s, e) =>
-            {
-                rowContainer.Background = transparentBrush;
-            };
-
-            var card = new Grid
-            {
-                ColumnSpacing = 10
-            };
-            card.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            // 2-row x 3-column grid (32 | * | 42) aligned vertically with MasterSliderRow above
+            var card = new Grid { ColumnSpacing = 8, RowSpacing = 2 };
+            card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(32) });
             card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            card.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            card.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            card.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            // 1. App Icon / Mute Button with muted corner badge
+            // Col 0 (RowSpan=2): Single mute target — App Icon Button with calm monochrome mute badge
             var iconBtn = new Button
             {
-                Width = 36,
-                Height = 36,
+                Width = 32,
+                Height = 32,
                 Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(6),
+                CornerRadius = new CornerRadius(4),
                 Background = new SolidColorBrush(Colors.Transparent),
                 BorderThickness = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            var iconHost = new Grid { Width = 32, Height = 32 };
+            var iconHost = new Grid { Width = 24, Height = 24 };
             UIElement iconVisual;
-            var iconSource = GetAppIcon(appGroup.ExecutablePath);
+            FontIcon? iconFallbackGlyph = null;
+            var iconSource = AppIconExtractor.GetAppIcon(appGroup.AppUserModelId, appGroup.ExecutablePath, appGroup.IconPath);
             if (iconSource != null)
             {
                 iconVisual = new Image
                 {
                     Source = iconSource,
-                    Width = 22,
-                    Height = 22,
+                    Width = 20,
+                    Height = 20,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
             }
             else
             {
-                iconVisual = new FontIcon
+                iconFallbackGlyph = new FontIcon
                 {
                     Glyph = "\uE71D",
-                    FontSize = 17,
+                    FontSize = 16,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"]
+                    Foreground = primaryTextBrush
                 };
+                iconVisual = iconFallbackGlyph;
             }
             iconHost.Children.Add(iconVisual);
+
+            var muteBadgeIcon = new FontIcon
+            {
+                Glyph = "\uE74F",
+                FontSize = 7.5,
+                Foreground = primaryTextBrush,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
 
             var muteBadge = new Border
             {
                 Width = 14,
                 Height = 14,
                 CornerRadius = new CornerRadius(7),
-                Background = (Brush)Application.Current.Resources["MutedStatusBrush"],
+                BorderThickness = new Thickness(1),
+                Background = GetThemeBrush("MixerThumbOuterBrush"),
+                BorderBrush = GetThemeBrush("MixerThumbBorderBrush"),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Visibility = appGroup.IsMuted ? Visibility.Visible : Visibility.Collapsed,
-                Child = new FontIcon
-                {
-                    Glyph = "\uE74F",
-                    FontSize = 8,
-                    Foreground = new SolidColorBrush(Colors.White),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                }
+                Child = muteBadgeIcon
             };
             iconHost.Children.Add(muteBadge);
-
             iconBtn.Content = iconHost;
             Grid.SetColumn(iconBtn, 0);
+            Grid.SetRow(iconBtn, 0);
+            Grid.SetRowSpan(iconBtn, 2);
             card.Children.Add(iconBtn);
 
-            // 2. Right Column: Top Header (Active dot + App Name + Percentage) + Full-Width Slider & Peak Bar
-            var rightGrid = new Grid
+            // Col 1, Row 0: App Title + Active Audio Indicator aligned to slider track left edge (x=+4)
+            var titleGrid = new Grid
             {
+                Margin = new Thickness(4, 0, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            rightGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            titleGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-            // Top row: Active dot + App Name (left) + Percentage / Muted (right, aligned to slider end)
-            var titleRow = new Grid { Margin = new Thickness(2, 0, 2, 0) };
-            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            titleRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var appTitleText = new TextBlock
+            {
+                Text = appGroup.AppName,
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = primaryTextBrush,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxLines = 1,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(appTitleText, 0);
+            titleGrid.Children.Add(appTitleText);
 
             var activeDot = new Ellipse
             {
                 Width = 6,
                 Height = 6,
-                Fill = (Brush)Application.Current.Resources["ActiveStatusBrush"],
-                Margin = new Thickness(0, 0, 6, 0),
+                Fill = GetThemeBrush("ActiveStatusBrush"),
+                Margin = new Thickness(6, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
                 Visibility = Visibility.Collapsed
             };
-            Grid.SetColumn(activeDot, 0);
-            titleRow.Children.Add(activeDot);
+            Grid.SetColumn(activeDot, 1);
+            titleGrid.Children.Add(activeDot);
 
-            var appTitleText = new TextBlock
-            {
-                Text = appGroup.AppName,
-                FontSize = 12,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorPrimaryBrush"],
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxLines = 1,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(appTitleText, 1);
-            titleRow.Children.Add(appTitleText);
+            Grid.SetColumn(titleGrid, 1);
+            Grid.SetRow(titleGrid, 0);
+            card.Children.Add(titleGrid);
 
+            // Col 1, Row 1: PeakSlider with integrated rail meter
             int currentVolPercent = (int)Math.Round(appGroup.Volume * 100);
-            var percentText = new TextBlock
+            var slider = new PeakSlider
             {
-                Text = appGroup.IsMuted ? "Muted" : $"{currentVolPercent}%",
-                FontSize = 11.5,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
-                TextAlignment = TextAlignment.Right,
-                Margin = new Thickness(8, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetColumn(percentText, 2);
-            titleRow.Children.Add(percentText);
-
-            Grid.SetRow(titleRow, 0);
-            rightGrid.Children.Add(titleRow);
-
-            // Bottom row: Full-width Slider + subtle 2px live peak meter bar
-            var sliderStack = new StackPanel { Spacing = 0 };
-            var slider = new Slider
-            {
+                Style = (Style)RootGrid.Resources["PeakMeterSliderStyle"],
                 Minimum = 0,
                 Maximum = 100,
                 Value = currentVolPercent,
-                Height = 24,
+                Height = 26,
+                MinHeight = 26,
+                Padding = new Thickness(4, 0, 4, 0),
                 IsThumbToolTipEnabled = false,
-                Margin = new Thickness(0, 2, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center
             };
+            AutomationProperties.SetName(slider, $"{appGroup.AppName} volume");
 
-            var peakBar = new ProgressBar
+            Grid.SetColumn(slider, 1);
+            Grid.SetRow(slider, 1);
+            card.Children.Add(slider);
+
+            // Col 2, Row 1: Tabular right-aligned percentage aligned vertically with slider track
+            var percentText = new TextBlock
             {
-                Height = 2,
-                Minimum = 0,
-                Maximum = 100,
-                Value = 0,
-                CornerRadius = new CornerRadius(1),
-                Margin = new Thickness(4, 1, 4, 0),
-                Opacity = 0.85,
-                Foreground = (Brush)Application.Current.Resources["PeakMeterFillBrush"],
-                Background = (Brush)Application.Current.Resources["PeakMeterTrackBrush"]
+                Text = $"{currentVolPercent}%",
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = primaryTextBrush,
+                TextAlignment = TextAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
             };
-
-            sliderStack.Children.Add(slider);
-            sliderStack.Children.Add(peakBar);
-
-            Grid.SetRow(sliderStack, 1);
-            rightGrid.Children.Add(sliderStack);
-
-            Grid.SetColumn(rightGrid, 1);
-            card.Children.Add(rightGrid);
+            Typography.SetNumeralAlignment(percentText, FontNumeralAlignment.Tabular);
+            Grid.SetColumn(percentText, 2);
+            Grid.SetRow(percentText, 1);
+            card.Children.Add(percentText);
 
             rowContainer.Child = card;
 
             var rowState = new AppRowState
             {
                 Group = appGroup,
+                RowBorder = rowContainer,
                 Slider = slider,
-                PeakBar = peakBar,
                 PercentText = percentText,
                 IconBtn = iconBtn,
                 IconVisual = iconVisual,
+                IconFallbackGlyph = iconFallbackGlyph,
                 MuteBadge = muteBadge,
+                MuteBadgeIcon = muteBadgeIcon,
+                AppTitleText = appTitleText,
                 ActiveDot = activeDot
             };
             _appRows.Add(rowState);
@@ -1039,16 +1172,25 @@ namespace AudioDeviceSwitcher
             slider.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler((s, e) => rowState.IsDragging = false), true);
             slider.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler((s, e) => rowState.IsDragging = false), true);
 
-            // Mouse wheel scroll over an app row adjusts that app's volume directly
-            rowContainer.PointerWheelChanged += (s, e) =>
+            void AdjustAppSliderByWheel(PointerRoutedEventArgs e, UIElement anchor)
             {
-                int delta = e.GetCurrentPoint(rowContainer).Properties.MouseWheelDelta;
+                int delta = e.GetCurrentPoint(anchor).Properties.MouseWheelDelta;
                 if (delta == 0) return;
 
                 int step = _settings.ScrollVolumeStep > 0 ? _settings.ScrollVolumeStep : 2;
                 double newVal = Math.Clamp(slider.Value + (delta > 0 ? step : -step), 0, 100);
                 slider.Value = newVal;
                 e.Handled = true;
+            }
+
+            // Wheel over slider always adjusts volume; wheel elsewhere on card only adjusts when list doesn't scroll
+            slider.PointerWheelChanged += (s, e) => AdjustAppSliderByWheel(e, slider);
+            rowContainer.PointerWheelChanged += (s, e) =>
+            {
+                if (AppsScrollViewer.ScrollableHeight <= 1.0)
+                {
+                    AdjustAppSliderByWheel(e, rowContainer);
+                }
             };
 
             slider.ValueChanged += (s, e) =>
@@ -1072,36 +1214,6 @@ namespace AudioDeviceSwitcher
             };
 
             return rowContainer;
-        }
-
-        private static ImageSource? GetAppIcon(string? exePath)
-        {
-            if (string.IsNullOrWhiteSpace(exePath) || !File.Exists(exePath))
-                return null;
-
-            if (_iconCache.TryGetValue(exePath, out var cached))
-                return cached;
-
-            try
-            {
-                using var sysIcon = System.Drawing.Icon.ExtractAssociatedIcon(exePath);
-                if (sysIcon == null) return null;
-
-                using var bitmap = sysIcon.ToBitmap();
-                var ms = new MemoryStream();
-                bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                ms.Position = 0;
-
-                var ras = ms.AsRandomAccessStream();
-                var bitmapImage = new BitmapImage();
-                bitmapImage.SetSource(ras);
-                _iconCache[exePath] = bitmapImage;
-                return bitmapImage;
-            }
-            catch
-            {
-                return null;
-            }
         }
 
         private void QuickSwitchButton_Click(object sender, RoutedEventArgs e)
